@@ -1,0 +1,49 @@
+name: jira-metrics
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 02:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Create env file
+        run: |
+          echo "JIRA_BASE_URL=${{ secrets.JIRA_BASE_URL }}" >> .env
+          echo "JIRA_EMAIL=${{ secrets.JIRA_EMAIL }}" >> .env
+          echo "JIRA_API_TOKEN=${{ secrets.JIRA_API_TOKEN }}" >> .env
+          echo "JIRA_JQL=${{ secrets.JIRA_JQL }}" >> .env
+          echo "JIRA_PROJECT_KEY=${{ secrets.JIRA_PROJECT_KEY }}" >> .env
+          echo "JIRA_ISSUE_TYPES=${{ secrets.JIRA_ISSUE_TYPES }}" >> .env
+          echo "JIRA_STATUS_NAMES=${{ secrets.JIRA_STATUS_NAMES }}" >> .env
+          echo "JIRA_START_DATE=${{ secrets.JIRA_START_DATE }}" >> .env
+          echo "JIRA_END_DATE=${{ secrets.JIRA_END_DATE }}" >> .env
+          echo "JIRA_DRY_RUN=false" >> .env
+          echo "LOG_LEVEL=info" >> .env
+
+      - name: Run metrics
+        run: npm run metrics || echo "Script exited with error; continuing to upload artifacts" 
+
+      - name: Upload data artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: jira-metrics-data
+          path: |
+            data/*.json
+            data/latest-summary.csv
+            .env
+          retention-days: 14
