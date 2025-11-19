@@ -22,6 +22,7 @@ export function loadEnvConfig() {
     JIRA_START_DATE: process.env.JIRA_START_DATE,
     JIRA_END_DATE: process.env.JIRA_END_DATE,
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
-    TZ: process.env.TZ || 'UTC'
+    TZ: process.env.TZ || 'UTC',
+    JIRA_SERVICE_DESK_ID: process.env.JIRA_SERVICE_DESK_ID
   };
 }

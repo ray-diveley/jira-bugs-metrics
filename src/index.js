@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { loadEnvConfig } from './loadEnv.js';
-import { fetchIssues } from './jiraClient.js';
+import { fetchIssues, fetchViaProject } from './jiraClient.js';
 import { computeMetrics, summarize } from './metrics.js';
 
 const cfg = loadEnvConfig();
@@ -15,7 +15,12 @@ async function main() {
     console.log('Dry run: using sample issues');
   } else {
     issues = await fetchIssues({});
-    console.log(`Fetched ${issues.length} issues from Jira.`);
+    console.log(`Fetched ${issues.length} issues from Jira search.`);
+    if (issues.length === 0 && cfg.JIRA_PROJECT_KEY) {
+      const fallback = await fetchViaProject({ projectKey: cfg.JIRA_PROJECT_KEY, maxIssues: Number(cfg.JIRA_MAX_ISSUES) || 50 });
+      console.log(`Project browse fallback returned ${fallback.length} issues.`);
+      issues = fallback;
+    }
   }
   const metrics = issues.map(computeMetrics);
   const summary = summarize(metrics);

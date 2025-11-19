@@ -10,19 +10,19 @@ export function computeMetrics(issue) {
   const comments = (fields.comment && fields.comment.comments) || [];
   const histories = (issue.changelog && issue.changelog.histories) || [];
 
-  // Find first assignee assignment time
-  let firstAssignmentTime = null;
-  for (const h of histories) {
-    for (const item of h.items) {
-      if (item.field === 'assignee' && item.toString) {
-        firstAssignmentTime = h.created;
-        break;
-      }
-    }
-    if (firstAssignmentTime) break;
-  }
-
-  // Determine first assignee comment time after assignment
+    // Find first assignee assignment time and who assigned it
+    let firstAssignmentTime = null;
+    let assignedBy = null;
+    for (const h of histories) {
+        for (const item of h.items) {
+            if (item.field === 'assignee' && item.toString) {
+                firstAssignmentTime = h.created;
+                assignedBy = h.author && h.author.displayName ? h.author.displayName : 'Unknown';
+                break;
+            }
+        }
+        if (firstAssignmentTime) break;
+    }  // Determine first assignee comment time after assignment
   let firstAssigneeCommentTime = null;
   if (assignee && firstAssignmentTime) {
     const assignmentMoment = parseISO(firstAssignmentTime);
@@ -53,6 +53,7 @@ export function computeMetrics(issue) {
     resolutionDate,
     firstAssignmentTime,
     firstAssigneeCommentTime,
+    assignedBy,
     openDurationMinutes,
     timeToResolutionMinutes,
     timeToFirstAssigneeCommentMinutes,

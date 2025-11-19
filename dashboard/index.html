@@ -122,6 +122,97 @@
             font-size: 0.9em;
             opacity: 0.9;
         }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            color: #666;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+        .btn {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #666;
+        }
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+        .config-btn {
+            background: white;
+            color: #667eea;
+            border: 2px solid white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-left: 10px;
+        }
+        .config-btn:hover {
+            background: #f8f9ff;
+        }
     </style>
 </head>
 <body>
@@ -129,7 +220,11 @@
         <h1>🐛 Jira Bug Metrics Dashboard</h1>
         <div class="timestamp" id="timestamp"></div>
         
-        <button class="load-btn" onclick="loadLatestMetrics()">🔄 Refresh Metrics</button>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button class="load-btn" onclick="loadLatestMetrics()">🔄 Refresh Metrics</button>
+            <button class="config-btn" onclick="openConfig()">⚙️ Configure Dates</button>
+            <button class="config-btn" onclick="runMetrics()">▶️ Run Collection</button>
+        </div>
         
         <div id="error-msg" class="error" style="display:none;"></div>
         
@@ -155,6 +250,42 @@
             </div>
         </div>
 
+        <div class="issues-table" style="margin-bottom: 30px;">
+            <h2 style="margin-bottom: 20px; color: #333;">Issues by Assignee <span id="date-range" style="font-size: 0.7em; color: #666; font-weight: normal;"></span></h2>onse Times</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Manager/Assigner</th>
+                        <th>Tickets Assigned</th>
+                        <th>Avg Time to Assign (hours)</th>
+                        <th>Fastest Assignment</th>
+                        <th>Slowest Assignment</th>
+                    </tr>
+                </thead>
+                <tbody id="manager-tbody">
+                    <tr><td colspan="5" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="issues-table" style="margin-bottom: 30px;">
+            <h2 style="margin-bottom: 20px; color: #333;">Issues by Assignee <span id="date-range" style="font-size: 0.7em; color: #666; font-weight: normal;"></span></h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Assignee</th>
+                        <th>Total Assigned</th>
+                        <th>Active (Not Done)</th>
+                        <th>Completed</th>
+                        <th>Avg Resolution Time (days)</th>
+                    </tr>
+                </thead>
+                <tbody id="assignee-tbody">
+                    <tr><td colspan="5" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <div class="issues-table">
             <h2 style="margin-bottom: 20px; color: #333;">Issue Details</h2>
             <table>
@@ -166,13 +297,35 @@
                         <th>Assignee</th>
                         <th>Open (days)</th>
                         <th>Resolution (days)</th>
-                        <th>Comment (days)</th>
                     </tr>
                 </thead>
                 <tbody id="issues-tbody">
-                    <tr><td colspan="7" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="6" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
+        </div>
+    </div>
+
+    <!-- Date Configuration Modal -->
+    <div id="configModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">📅 Configure Date Range</div>
+            <div class="form-group">
+                <label for="startDate">Start Date</label>
+                <input type="date" id="startDate" value="2025-11-01">
+            </div>
+            <div class="form-group">
+                <label for="endDate">End Date</label>
+                <input type="date" id="endDate" value="2025-11-19">
+            </div>
+            <div class="form-group">
+                <label for="maxIssues">Max Issues (leave empty for all)</label>
+                <input type="number" id="maxIssues" placeholder="e.g., 25, 50, 100" value="50">
+            </div>
+            <div class="button-group">
+                <button class="btn btn-secondary" onclick="closeConfig()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveAndRun()">Save & Run Collection</button>
+            </div>
         </div>
     </div>
 
@@ -195,22 +348,39 @@
             errorDiv.style.display = 'none';
             
             try {
-                // Find the latest metrics file
-                const files = await fetch('../data/').then(r => r.text()).catch(() => '');
-                const jsonFiles = [...files.matchAll(/metrics-([^"<]+)\.json/g)].map(m => m[1]);
+                // Try to get list from API first
+                let latestFile = null;
                 
-                if (jsonFiles.length === 0) {
-                    throw new Error('No metrics files found. Run "npm start" first.');
+                try {
+                    const listResponse = await fetch('/api/metrics-files');
+                    if (listResponse.ok) {
+                        const filesList = await listResponse.json();
+                        if (filesList.files && filesList.files.length > 0) {
+                            latestFile = filesList.files[filesList.files.length - 1];
+                        }
+                    }
+                } catch (e) {
+                    console.log('API not available, trying direct file access');
                 }
                 
-                // Sort by timestamp and get latest
-                jsonFiles.sort().reverse();
-                const latest = `../data/metrics-${jsonFiles[0]}.json`;
+                // If no file found via API, try the most recent known file
+                if (!latestFile) {
+                    latestFile = 'metrics-2025-11-19T15-35-09-149Z.json';
+                }
                 
-                const response = await fetch(latest);
+                const response = await fetch(`/data/${latestFile}`);
                 if (!response.ok) throw new Error('Failed to load metrics file');
                 
                 const data = await response.json();
+                
+                console.log('Loaded data:', data);
+                
+                // Extract and display date range from config
+                const saved = JSON.parse(localStorage.getItem('jiraConfig') || '{}');
+                const dateRangeText = saved.startDate && saved.endDate 
+                    ? `(${saved.startDate} to ${saved.endDate})`
+                    : '';
+                document.getElementById('date-range').textContent = dateRangeText;
                 
                 // Update summary metrics
                 document.getElementById('total-count').textContent = data.summary.count || 0;
@@ -219,9 +389,11 @@
                 document.getElementById('avg-comment').textContent = minutesToDays(data.summary.avgTimeToFirstAssigneeCommentMinutes);
                 document.getElementById('timestamp').textContent = `Last updated: ${new Date(data.generatedAt).toLocaleString()}`;
                 
+                console.log('Updated summary cards');
+                
                 // Update table
                 const tbody = document.getElementById('issues-tbody');
-                tbody.innerHTML = data.metrics.map(issue => `
+                const rows = data.metrics.map(issue => `
                     <tr>
                         <td><strong>${issue.key}</strong></td>
                         <td>${issue.summary || ''}</td>
@@ -229,9 +401,108 @@
                         <td>${issue.assigneeCurrent || 'Unassigned'}</td>
                         <td>${minutesToDays(issue.openDurationMinutes)}</td>
                         <td>${minutesToDays(issue.timeToResolutionMinutes)}</td>
-                        <td>${minutesToDays(issue.timeToFirstAssigneeCommentMinutes)}</td>
                     </tr>
                 `).join('');
+                
+                tbody.innerHTML = rows;
+                console.log('Updated table with', data.metrics.length, 'rows');
+                
+                // Calculate assignee statistics
+                const assigneeStats = {};
+                const doneStatuses = ['done', 'closed', 'complete', 'completed', 'resolved'];
+                
+                data.metrics.forEach(issue => {
+                    const assignee = issue.assigneeCurrent || 'Unassigned';
+                    if (!assigneeStats[assignee]) {
+                        assigneeStats[assignee] = {
+                            total: 0,
+                            active: 0,
+                            completed: 0,
+                            resolutionTimes: []
+                        };
+                    }
+                    assigneeStats[assignee].total++;
+                    
+                    const status = (issue.status || '').toLowerCase();
+                    const isCompleted = doneStatuses.some(s => status.includes(s)) || issue.resolutionDate;
+                    
+                    if (isCompleted) {
+                        assigneeStats[assignee].completed++;
+                        if (issue.timeToResolutionMinutes !== null) {
+                            assigneeStats[assignee].resolutionTimes.push(issue.timeToResolutionMinutes);
+                        }
+                    } else {
+                        assigneeStats[assignee].active++;
+                    }
+                });
+                
+                // Update assignee table
+                const assigneeTbody = document.getElementById('assignee-tbody');
+                const assigneeRows = Object.entries(assigneeStats)
+                    .sort((a, b) => b[1].total - a[1].total)
+                    .map(([assignee, stats]) => {
+                        const avgResolution = stats.resolutionTimes.length > 0
+                            ? minutesToDays(stats.resolutionTimes.reduce((a, b) => a + b, 0) / stats.resolutionTimes.length)
+                            : '--';
+                        return `
+                            <tr>
+                                <td><strong>${assignee}</strong></td>
+                                <td>${stats.total}</td>
+                                <td><strong style="color: ${stats.active > 0 ? '#856404' : '#28a745'}">${stats.active}</strong></td>
+                                <td>${stats.completed}</td>
+                                <td>${avgResolution}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                
+                assigneeTbody.innerHTML = assigneeRows;
+                console.log('Updated assignee stats for', Object.keys(assigneeStats).length, 'assignees');
+                
+                // Calculate manager assignment response times
+                const managerStats = {};
+                data.metrics.forEach(issue => {
+                    if (issue.firstAssignmentTime && issue.created) {
+                        const created = new Date(issue.created);
+                        const assigned = new Date(issue.firstAssignmentTime);
+                        const hoursToAssign = (assigned - created) / (1000 * 60 * 60);
+                        
+                        // Extract manager from changelog (would need to enhance data collection)
+                        // For now, use 'Manager' as placeholder - will need changelog author data
+                        const manager = 'Assignment Team';
+                        
+                        if (!managerStats[manager]) {
+                            managerStats[manager] = {
+                                count: 0,
+                                times: []
+                            };
+                        }
+                        managerStats[manager].count++;
+                        managerStats[manager].times.push(hoursToAssign);
+                    }
+                });
+                
+                const managerTbody = document.getElementById('manager-tbody');
+                if (Object.keys(managerStats).length === 0) {
+                    managerTbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">No assignment data available (need changelog author info)</td></tr>';
+                } else {
+                    const managerRows = Object.entries(managerStats)
+                        .map(([manager, stats]) => {
+                            const avg = (stats.times.reduce((a, b) => a + b, 0) / stats.times.length).toFixed(1);
+                            const min = Math.min(...stats.times).toFixed(1);
+                            const max = Math.max(...stats.times).toFixed(1);
+                            return `
+                                <tr>
+                                    <td><strong>${manager}</strong></td>
+                                    <td>${stats.count}</td>
+                                    <td>${avg}</td>
+                                    <td>${min}h</td>
+                                    <td>${max}h</td>
+                                </tr>
+                            `;
+                        }).join('');
+                    managerTbody.innerHTML = managerRows;
+                }
+                console.log('Updated manager stats');
                 
             } catch (error) {
                 errorDiv.textContent = `Error: ${error.message}`;
@@ -242,6 +513,99 @@
 
         // Auto-load on page load
         window.addEventListener('load', loadLatestMetrics);
+
+        function openConfig() {
+            // Load current values from localStorage if available
+            const saved = JSON.parse(localStorage.getItem('jiraConfig') || '{}');
+            document.getElementById('startDate').value = saved.startDate || '2025-11-01';
+            document.getElementById('endDate').value = saved.endDate || new Date().toISOString().split('T')[0];
+            document.getElementById('maxIssues').value = saved.maxIssues || '50';
+            document.getElementById('configModal').style.display = 'block';
+        }
+
+        function closeConfig() {
+            document.getElementById('configModal').style.display = 'none';
+        }
+
+        async function saveAndRun() {
+            const config = {
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                maxIssues: document.getElementById('maxIssues').value
+            };
+            
+            // Save to localStorage
+            localStorage.setItem('jiraConfig', JSON.stringify(config));
+            closeConfig();
+            
+            // Show loading message
+            const errorDiv = document.getElementById('error-msg');
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = '#d1ecf1';
+            errorDiv.style.color = '#0c5460';
+            errorDiv.textContent = `Running metrics collection for ${config.startDate} to ${config.endDate}...`;
+            
+            try {
+                // Call the API to update .env and run collection
+                const response = await fetch('/api/run-metrics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (response.ok) {
+                    errorDiv.textContent = 'Collection complete! Refreshing dashboard...';
+                    setTimeout(() => {
+                        loadLatestMetrics();
+                        errorDiv.style.display = 'none';
+                    }, 1000);
+                } else {
+                    throw new Error('Failed to run metrics collection');
+                }
+            } catch (error) {
+                errorDiv.style.background = '#f8d7da';
+                errorDiv.style.color = '#721c24';
+                errorDiv.textContent = 'Could not auto-run. Please run "npm start" in terminal with your chosen dates.';
+            }
+        }
+
+        async function runMetrics() {
+            const errorDiv = document.getElementById('error-msg');
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = '#d1ecf1';
+            errorDiv.style.color = '#0c5460';
+            errorDiv.textContent = 'Running metrics collection with current .env settings...';
+            
+            try {
+                const response = await fetch('/api/run-metrics', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                if (response.ok) {
+                    errorDiv.textContent = 'Collection complete! Refreshing dashboard...';
+                    setTimeout(() => {
+                        loadLatestMetrics();
+                        errorDiv.style.display = 'none';
+                    }, 1000);
+                } else {
+                    throw new Error('Failed to run');
+                }
+            } catch (error) {
+                errorDiv.style.background = '#fff3cd';
+                errorDiv.style.color = '#856404';
+                errorDiv.textContent = '⚠️ Auto-run not available. Please run "npm start" in your terminal.';
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('configModal');
+            if (event.target === modal) {
+                closeConfig();
+            }
+        }
     </script>
 </body>
 </html>
