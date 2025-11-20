@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SLA Trends & Comparisons - Jira Bug Metrics</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    header {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    h1 {
+      color: #2d3748;
+      font-size: 28px;
+    }
+    
+    .nav-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+    
+    .btn-secondary {
+      background: #48bb78;
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background: #38a169;
+    }
+    
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .section-title {
+      color: #2d3748;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .trend-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .trend-card {
+      background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+      border-radius: 8px;
+      padding: 20px;
+      border-left: 4px solid #667eea;
+    }
+    
+    .trend-card.positive {
+      border-left-color: #48bb78;
+      background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
+    }
+    
+    .trend-card.negative {
+      border-left-color: #f56565;
+      background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+    }
+    
+    .trend-label {
+      color: #718096;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    
+    .trend-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 5px;
+    }
+    
+    .trend-change {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .trend-change.up {
+      color: #48bb78;
+    }
+    
+    .trend-change.down {
+      color: #f56565;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    th {
+      background: #f7fafc;
+      color: #4a5568;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    
+    tr:hover {
+      background: #f7fafc;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .badge-success {
+      background: #c6f6d5;
+      color: #22543d;
+    }
+    
+    .badge-danger {
+      background: #fed7d7;
+      color: #742a2a;
+    }
+    
+    .badge-warning {
+      background: #feebc8;
+      color: #744210;
+    }
+    
+    .chart-container {
+      width: 100%;
+      height: 400px;
+      position: relative;
+    }
+    
+    .line-chart {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      padding: 20px 0;
+    }
+    
+    .chart-line {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 300px;
+      border-left: 2px solid #cbd5e0;
+      border-bottom: 2px solid #cbd5e0;
+    }
+    
+    .chart-point {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: #667eea;
+      border: 3px solid white;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .chart-point:hover {
+      transform: scale(1.5);
+      background: #5568d3;
+      z-index: 10;
+    }
+    
+    .chart-label {
+      position: absolute;
+      font-size: 11px;
+      color: #718096;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #718096;
+    }
+    
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      color: #a0aec0;
+      font-style: italic;
+    }
+    
+    .comparison-selector {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+    
+    .comparison-selector select {
+      padding: 10px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+    }
+    
+    .comparison-selector label {
+      font-weight: 600;
+      color: #4a5568;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>📈 SLA Trends & Comparisons</h1>
+      </div>
+      <div class="nav-buttons">
+        <button class="btn btn-secondary" onclick="location.href='index.html'">← Main Dashboard</button>
+        <button class="btn btn-secondary" onclick="location.href='kpi.html'">📊 Current KPIs</button>
+        <button class="btn btn-primary" onclick="loadTrends()">🔄 Refresh</button>
+      </div>
+    </header>
+    
+    <!-- Period Comparison -->
+    <div class="section">
+      <h2 class="section-title">Period-over-Period Comparison</h2>
+      <div class="comparison-selector">
+        <div>
+          <label>Compare:</label>
+          <select id="period1" onchange="comparePeriods()">
+            <option value="">Select period 1...</option>
+          </select>
+        </div>
+        <div style="font-size: 20px;">vs</div>
+        <div>
+          <label>With:</label>
+          <select id="period2" onchange="comparePeriods()">
+            <option value="">Select period 2...</option>
+          </select>
+        </div>
+      </div>
+      <div id="comparison-results"></div>
+    </div>
+    
+    <!-- Quarterly Trends -->
+    <div class="section">
+      <h2 class="section-title">Quarterly Performance Trends</h2>
+      <div id="quarterly-trends"></div>
+    </div>
+    
+    <!-- Historical Timeline -->
+    <div class="section">
+      <h2 class="section-title">SLA Compliance Over Time</h2>
+      <div class="chart-container">
+        <canvas id="timeline-chart" width="1200" height="400"></canvas>
+      </div>
+    </div>
+    
+    <!-- All Snapshots -->
+    <div class="section">
+      <h2 class="section-title">All Recorded Periods</h2>
+      <table id="snapshots-table">
+        <thead>
+          <tr>
+            <th>Period</th>
+            <th>Collection Date</th>
+            <th>Total Tickets</th>
+            <th>SLA Compliance</th>
+            <th>Met SLA</th>
+            <th>Breached SLA</th>
+            <th>Top Performer</th>
+          </tr>
+        </thead>
+        <tbody id="snapshots-tbody">
+          <tr><td colspan="7" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <script>
+    let historyData = null;
+    
+    async function loadTrends() {
+      try {
+        const response = await fetch('/api/kpi-history');
+        historyData = await response.json();
+        
+        if (!historyData || !historyData.snapshots || historyData.snapshots.length === 0) {
+          document.getElementById('quarterly-trends').innerHTML = '<div class="no-data">No historical data available. Run metrics collection to start tracking trends.</div>';
+          document.getElementById('snapshots-tbody').innerHTML = '<tr><td colspan="7" class="no-data">No data</td></tr>';
+          return;
+        }
+        
+        populatePeriodSelectors();
+        renderQuarterlyTrends();
+        renderSnapshotsTable();
+        renderTimelineChart();
+        
+      } catch (error) {
+        console.error('Error loading trends:', error);
+        document.getElementById('quarterly-trends').innerHTML = '<div class="no-data">Failed to load historical data</div>';
+      }
+    }
+    
+    function populatePeriodSelectors() {
+      const select1 = document.getElementById('period1');
+      const select2 = document.getElementById('period2');
+      
+      const options = historyData.snapshots.map((s, i) => {
+        const label = `${s.period.start} to ${s.period.end} (${s.kpis.overall.complianceRate}%)`;
+        return `<option value="${i}">${label}</option>`;
+      }).join('');
+      
+      select1.innerHTML = '<option value="">Select period 1...</option>' + options;
+      select2.innerHTML = '<option value="">Select period 2...</option>' + options;
+    }
+    
+    function comparePeriods() {
+      const idx1 = document.getElementById('period1').value;
+      const idx2 = document.getElementById('period2').value;
+      
+      if (idx1 === '' || idx2 === '') {
+        document.getElementById('comparison-results').innerHTML = '';
+        return;
+      }
+      
+      const p1 = historyData.snapshots[idx1];
+      const p2 = historyData.snapshots[idx2];
+      
+      const complianceChange = parseFloat(p1.kpis.overall.complianceRate) - parseFloat(p2.kpis.overall.complianceRate);
+      const ticketChange = p1.kpis.overall.totalTickets - p2.kpis.overall.totalTickets;
+      const ticketGrowth = p2.kpis.overall.totalTickets > 0 
+        ? ((ticketChange / p2.kpis.overall.totalTickets) * 100).toFixed(1) 
+        : 0;
+      
+      const html = `
+        <div class="trend-grid">
+          <div class="trend-card ${complianceChange > 0 ? 'positive' : complianceChange < 0 ? 'negative' : ''}">
+            <div class="trend-label">SLA Compliance Change</div>
+            <div class="trend-value">${Math.abs(complianceChange).toFixed(1)}%</div>
+            <div class="trend-change ${complianceChange > 0 ? 'up' : 'down'}">
+              ${complianceChange > 0 ? '↑' : '↓'} ${complianceChange > 0 ? 'Improved' : 'Decreased'}
+            </div>
+          </div>
+          
+          <div class="trend-card">
+            <div class="trend-label">Period 1 (${p1.period.start} to ${p1.period.end})</div>
+            <div class="trend-value">${p1.kpis.overall.complianceRate}%</div>
+            <div style="color: #718096; font-size: 14px;">
+              ${p1.kpis.overall.totalTickets} tickets, ${p1.kpis.overall.metSLA} met SLA
+            </div>
+          </div>
+          
+          <div class="trend-card">
+            <div class="trend-label">Period 2 (${p2.period.start} to ${p2.period.end})</div>
+            <div class="trend-value">${p2.kpis.overall.complianceRate}%</div>
+            <div style="color: #718096; font-size: 14px;">
+              ${p2.kpis.overall.totalTickets} tickets, ${p2.kpis.overall.metSLA} met SLA
+            </div>
+          </div>
+          
+          <div class="trend-card ${ticketChange > 0 ? 'positive' : ticketChange < 0 ? 'negative' : ''}">
+            <div class="trend-label">Ticket Volume Change</div>
+            <div class="trend-value">${Math.abs(ticketChange)}</div>
+            <div class="trend-change ${ticketChange > 0 ? 'up' : 'down'}">
+              ${ticketChange > 0 ? '↑' : '↓'} ${Math.abs(ticketGrowth)}% ${ticketChange > 0 ? 'growth' : 'reduction'}
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById('comparison-results').innerHTML = html;
+    }
+    
+    function renderQuarterlyTrends() {
+      const quarters = groupByQuarter(historyData.snapshots);
+      
+      if (quarters.length === 0) {
+        document.getElementById('quarterly-trends').innerHTML = '<div class="no-data">Not enough data for quarterly analysis</div>';
+        return;
+      }
+      
+      const trends = [];
+      for (let i = 1; i < quarters.length; i++) {
+        const complianceChange = parseFloat(quarters[i].avgCompliance) - parseFloat(quarters[i-1].avgCompliance);
+        trends.push({
+          from: quarters[i-1].quarter,
+          to: quarters[i].quarter,
+          change: complianceChange,
+          fromRate: quarters[i-1].avgCompliance,
+          toRate: quarters[i].avgCompliance
+        });
+      }
+      
+      const html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>From</th>
+              <th>To</th>
+              <th>Change</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${trends.map(t => `
+              <tr>
+                <td><strong>${t.from} → ${t.to}</strong></td>
+                <td>${t.fromRate}%</td>
+                <td>${t.toRate}%</td>
+                <td><span class="badge ${t.change > 0 ? 'badge-success' : t.change < 0 ? 'badge-danger' : 'badge-warning'}">
+                  ${t.change > 0 ? '↑' : t.change < 0 ? '↓' : '→'} ${Math.abs(t.change).toFixed(1)}%
+                </span></td>
+                <td>${t.change > 0 ? '✅ Improved' : t.change < 0 ? '⚠️ Declined' : '→ Stable'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      
+      document.getElementById('quarterly-trends').innerHTML = html;
+    }
+    
+    function groupByQuarter(snapshots) {
+      const quarters = {};
+      
+      snapshots.forEach(s => {
+        const date = new Date(s.period.start);
+        const year = date.getFullYear();
+        const quarter = Math.floor(date.getMonth() / 3) + 1;
+        const key = `${year}-Q${quarter}`;
+        
+        if (!quarters[key]) {
+          quarters[key] = [];
+        }
+        quarters[key].push(s);
+      });
+      
+      return Object.entries(quarters).map(([quarter, snaps]) => {
+        const avgCompliance = (snaps.reduce((sum, s) => 
+          sum + parseFloat(s.kpis.overall.complianceRate), 0
+        ) / snaps.length).toFixed(1);
+        
+        return { quarter, avgCompliance, count: snaps.length };
+      }).sort((a, b) => a.quarter.localeCompare(b.quarter));
+    }
+    
+    function renderSnapshotsTable() {
+      const tbody = document.getElementById('snapshots-tbody');
+      
+      const rows = historyData.snapshots.map(s => `
+        <tr>
+          <td><strong>${s.period.start} to ${s.period.end}</strong></td>
+          <td>${new Date(s.timestamp).toLocaleString()}</td>
+          <td>${s.kpis.overall.totalTickets}</td>
+          <td><span class="badge ${parseFloat(s.kpis.overall.complianceRate) >= 85 ? 'badge-success' : parseFloat(s.kpis.overall.complianceRate) >= 70 ? 'badge-warning' : 'badge-danger'}">
+            ${s.kpis.overall.complianceRate}%
+          </span></td>
+          <td>${s.kpis.overall.metSLA}</td>
+          <td>${s.kpis.overall.breachedSLA}</td>
+          <td>${s.kpis.topPerformer || 'N/A'} ${s.kpis.topPerformerRate ? '(' + s.kpis.topPerformerRate + '%)' : ''}</td>
+        </tr>
+      `).join('');
+      
+      tbody.innerHTML = rows;
+    }
+    
+    function renderTimelineChart() {
+      const canvas = document.getElementById('timeline-chart');
+      const ctx = canvas.getContext('2d');
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = 60;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+      
+      // Prepare data
+      const data = historyData.snapshots.map(s => ({
+        date: new Date(s.timestamp),
+        compliance: parseFloat(s.kpis.overall.complianceRate),
+        label: `${s.period.start.substring(5)} to ${s.period.end.substring(5)}`
+      })).reverse();
+      
+      if (data.length === 0) return;
+      
+      const maxCompliance = 100;
+      const minCompliance = 0;
+      
+      // Draw axes
+      ctx.strokeStyle = '#cbd5e0';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(padding, padding);
+      ctx.lineTo(padding, height - padding);
+      ctx.lineTo(width - padding, height - padding);
+      ctx.stroke();
+      
+      // Draw grid lines and Y-axis labels
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#718096';
+      ctx.font = '12px sans-serif';
+      
+      for (let i = 0; i <= 10; i++) {
+        const y = padding + (height - 2 * padding) * (1 - i / 10);
+        const value = (maxCompliance - minCompliance) * (i / 10) + minCompliance;
+        
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+        
+        ctx.fillText(value.toFixed(0) + '%', 10, y + 5);
+      }
+      
+      // Draw line
+      ctx.strokeStyle = '#667eea';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      
+      data.forEach((point, i) => {
+        const x = padding + (width - 2 * padding) * (i / (data.length - 1 || 1));
+        const y = padding + (height - 2 * padding) * (1 - point.compliance / maxCompliance);
+        
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      
+      ctx.stroke();
+      
+      // Draw points
+      data.forEach((point, i) => {
+        const x = padding + (width - 2 * padding) * (i / (data.length - 1 || 1));
+        const y = padding + (height - 2 * padding) * (1 - point.compliance / maxCompliance);
+        
+        // Point
+        ctx.fillStyle = '#667eea';
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Label
+        ctx.fillStyle = '#4a5568';
+        ctx.font = '11px sans-serif';
+        ctx.save();
+        ctx.translate(x, height - padding + 15);
+        ctx.rotate(-Math.PI / 4);
+        ctx.fillText(point.label, 0, 0);
+        ctx.restore();
+        
+        // Value
+        ctx.fillStyle = '#2d3748';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(point.compliance.toFixed(1) + '%', x - 15, y - 10);
+      });
+    }
+    
+    // Load on page load
+    loadTrends();
+  </script>
+</body>
+</html>

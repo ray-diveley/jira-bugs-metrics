@@ -16,6 +16,50 @@ const mimeTypes = {
 };
 
 const server = http.createServer(async (req, res) => {
+  // API endpoint for KPI history
+  if (req.url === '/api/kpi-history' && req.method === 'GET') {
+    try {
+      const historyPath = './data/kpi-history.json';
+      if (fs.existsSync(historyPath)) {
+        const historyData = fs.readFileSync(historyPath, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(historyData);
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ snapshots: [] }));
+      }
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+  
+  // API endpoint for latest metrics
+  if (req.url === '/api/latest-metrics' && req.method === 'GET') {
+    try {
+      const dataDir = './data';
+      const files = fs.readdirSync(dataDir)
+        .filter(f => f.startsWith('metrics-') && f.endsWith('.json'))
+        .sort()
+        .reverse();
+      
+      if (files.length > 0) {
+        const latestFile = path.join(dataDir, files[0]);
+        const metricsData = fs.readFileSync(latestFile, 'utf8');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(metricsData);
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No metrics files found' }));
+      }
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+    }
+    return;
+  }
+  
   // API endpoint for listing metrics files
   if (req.url === '/api/metrics-files' && req.method === 'GET') {
     try {
@@ -78,7 +122,12 @@ const server = http.createServer(async (req, res) => {
   
   // Serve static files
   let filePath = '.' + req.url;
-  if (filePath === './') filePath = './dashboard/index.html';
+  if (filePath === './') {
+    filePath = './dashboard/index.html';
+  } else if (!filePath.includes('/dashboard/') && !filePath.includes('/data/')) {
+    // If requesting a file without a directory, assume it's in dashboard/
+    filePath = './dashboard' + req.url;
+  }
   
   const extname = path.extname(filePath);
   const contentType = mimeTypes[extname] || 'application/octet-stream';

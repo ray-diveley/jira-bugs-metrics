@@ -59,9 +59,7 @@ export async function fetchIssues({ maxIssues = Number(JIRA_MAX_ISSUES) || undef
       startAt,
       maxResults,
       ...(useChangelog ? { expand: 'changelog' } : {}),
-      fields: [
-        'summary','status','assignee','created','resolutiondate','comment'
-      ]
+      fields: '*all'
     };
     let data;
     try {
@@ -161,12 +159,12 @@ export async function fetchViaProject({ projectKey, maxIssues = 50 }) {
         if (keys.length >= maxIssues) break;
       }
     }
-    // Fetch each issue individually with changelog expansion
+    // Fetch each issue individually with changelog expansion and all fields to get SLA
     for (const key of keys.slice(0, maxIssues)) {
       try {
         const issueUrl = `${JIRA_BASE_URL}/rest/api/3/issue/${key}`;
         const issParams = { 
-          fields: 'summary,status,assignee,created,resolutiondate,comment',
+          fields: '*all',
           expand: 'changelog'
         };
         const { data: issue } = await axios.get(issueUrl, { headers, params: issParams });
@@ -175,7 +173,7 @@ export async function fetchViaProject({ projectKey, maxIssues = 50 }) {
         if (LOG_LEVEL === 'debug') console.log('[debug] Failed fetching', key, e.message);
         // Retry without changelog if it fails
         try {
-          const issParams = { fields: 'summary,status,assignee,created,resolutiondate,comment' };
+          const issParams = { fields: '*all' };
           const { data: issue } = await axios.get(issueUrl, { headers, params: issParams });
           results.push(issue);
         } catch (e2) {

@@ -3,6 +3,8 @@ import path from 'path';
 import { loadEnvConfig } from './loadEnv.js';
 import { fetchIssues, fetchViaProject } from './jiraClient.js';
 import { computeMetrics, summarize } from './metrics.js';
+import { calculateSLAKPIs } from './kpi.js';
+import { saveKPISnapshot } from './kpiHistory.js';
 
 const cfg = loadEnvConfig();
 
@@ -19,7 +21,17 @@ async function main() {
     if (issues.length === 0 && cfg.JIRA_PROJECT_KEY) {
       const fallback = await fetchViaProject({ projectKey: cfg.JIRA_PROJECT_KEY, maxIssues: Number(cfg.JIRA_MAX_ISSUES) || 50 });
       console.log(`Project browse fallback returned ${fallback.length} issues.`);
-      issues = fallback;
+      // Filter fallback issues by creation date
+      issues = fallback.filter(issue => {
+        if (!issue.fields || !issue.fields.created) return true;
+        const created = new Date(issue.fields.created);
+        const startDate = cfg.JIRA_START_DATE ? new Date(cfg.JIRA_START_DATE) : null;
+        const endDate = cfg.JIRA_END_DATE ? new Date(cfg.JIRA_END_DATE) : null;
+        if (startDate && created < startDate) return false;
+        if (endDate && created > endDate) return false;
+        return true;
+      });
+      console.log(`After date filtering: ${issues.length} issues.`);
     }
   }
   const metrics = issues.map(computeMetrics);
@@ -28,7 +40,17 @@ async function main() {
   const jsonPath = path.join('data', `metrics-${timestamp}.json`);
   fs.writeFileSync(jsonPath, JSON.stringify(out, null, 2));
   writeSummaryCsv(metrics);
+  
+  // Calculate and save KPI snapshot
+  const kpis = calculateSLAKPIs(out);
+  const period = {
+    start: cfg.JIRA_START_DATE || 'N/A',
+    end: cfg.JIRA_END_DATE || 'N/A'
+  };
+  saveKPISnapshot(kpis, period);
+  
   console.log('Summary:', summary);
+  console.log('SLA Compliance Rate:', kpis.overall.complianceRate + '%');
   console.log('Wrote metrics file:', jsonPath);
 }
 
