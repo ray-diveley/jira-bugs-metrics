@@ -67,18 +67,35 @@ export function calculateSLAKPIs(metricsData) {
       const assigneeResponseMinutes = ticket.timeToFirstAssigneeCommentMinutes;
       
       if (assigneeResponseMinutes === null) {
-        const assignmentDate = new Date(ticket.firstAssignmentTime);
-        const now = new Date();
-        const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
-        slaResults.push({
-          ticket: ticket.key,
-          manager: ticket.assigneeCurrent,
-          role: 'assignee',
-          met: elapsedMinutes <= goalMinutes,
-          responseMinutes: null,
-          goalMinutes,
-          status: 'pending'
-        });
+        // No comment - check if resolved instead
+        if (ticket.resolutionDate) {
+          const assignmentDate = new Date(ticket.firstAssignmentTime);
+          const resolutionDate = new Date(ticket.resolutionDate);
+          const resolutionMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
+          slaResults.push({
+            ticket: ticket.key,
+            manager: ticket.assigneeCurrent,
+            role: 'assignee',
+            met: resolutionMinutes <= goalMinutes,
+            responseMinutes: resolutionMinutes,
+            goalMinutes,
+            status: 'resolved'
+          });
+        } else {
+          // Not resolved either - still pending
+          const assignmentDate = new Date(ticket.firstAssignmentTime);
+          const now = new Date();
+          const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
+          slaResults.push({
+            ticket: ticket.key,
+            manager: ticket.assigneeCurrent,
+            role: 'assignee',
+            met: elapsedMinutes <= goalMinutes,
+            responseMinutes: null,
+            goalMinutes,
+            status: 'pending'
+          });
+        }
       } else {
         slaResults.push({
           ticket: ticket.key,
@@ -94,7 +111,7 @@ export function calculateSLAKPIs(metricsData) {
   });
   
   const metCount = slaResults.filter(r => r.met).length;
-  const breachedCount = slaResults.filter(r => !r.met && r.status === 'responded').length;
+  const breachedCount = slaResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
   const pendingCount = slaResults.filter(r => r.status === 'pending').length;
   
   const complianceRate = totalTickets > 0 ? (metCount / totalTickets) * 100 : 0;

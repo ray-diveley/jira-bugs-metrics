@@ -114,6 +114,15 @@
         .expand-icon.expanded {
             transform: rotate(90deg);
         }
+        .ticket-link {
+            color: #667eea;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .ticket-link:hover {
+            color: #5568d3;
+            text-decoration: underline;
+        }
         .load-btn {
             background: white;
             color: #667eea;
@@ -319,7 +328,12 @@
         </div>
 
         <div class="issues-table" style="margin-bottom: 30px;">
-            <h2 style="margin-bottom: 10px; color: #333;">📞 On-call Performance</h2>
+            <h2 style="margin-bottom: 10px; color: #333;">
+                📞 On-call Performance
+                <button onclick="toggleAllOnCallDetails()" style="margin-left: 15px; padding: 6px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em;">
+                    <span id="toggle-all-icon">▼</span> Expand/Collapse All
+                </button>
+            </h2>
             <div style="font-size: 1.3em; font-weight: bold; color: #667eea; margin-bottom: 15px;" id="oncall-date-range">
                 Loading date range...
             </div>
@@ -348,6 +362,9 @@
 
         <div class="issues-table" style="margin-bottom: 30px;">
             <h2 style="margin-bottom: 20px; color: #333;">👨‍💻 Developer/Assignee Metrics <span id="date-range" style="font-size: 0.7em; color: #666; font-weight: normal;"></span></h2>
+            <p style="color: #666; font-size: 0.85em; margin-bottom: 10px; font-style: italic;">
+                ℹ️ "Assignee Response Breached" tracks whether the assignee responded (via comment) or resolved the ticket within SLA <strong>after being assigned</strong> (different from On-Call SLA which tracks initial response when ticket was created)
+            </p>
             <table>
                 <thead>
                     <tr>
@@ -355,7 +372,7 @@
                         <th>Total Assigned</th>
                         <th>Active (Not Done)</th>
                         <th>Completed</th>
-                        <th>SLA Breached</th>
+                        <th title="Number of tickets where assignee failed to respond within SLA after being assigned">Assignee Response Breached</th>
                         <th>Avg Resolution Time (days)</th>
                     </tr>
                 </thead>
@@ -374,8 +391,7 @@
                 </select>
             </div>
             <p style="color: #666; font-size: 0.85em; margin-top: 10px; font-style: italic;">
-                💡 "Who Was On-Call" shows scheduled on-call person from Opsgenie<br>
-                <span style="font-size: 0.9em;">Schedule: Mon-Fri, 7am-11pm UTC (started Oct 31, 2025). Labels: [Weekend], [After Hours], [Before Oct 31]</span>
+                💡 SLA Status shows whether the assignee responded (via comment) or resolved the ticket within 40h after being assigned.
             </p>
             <table>
                 <thead>
@@ -385,17 +401,16 @@
                         <th>Status</th>
                         <th>Priority</th>
                         <th>Assignee</th>
-                        <th>Assigned By</th>
-                        <th>Who Was On-Call</th>
                         <th>Created</th>
-                        <th>First Action</th>
-                        <th>SLA Status</th>
+                        <th>Assigned Date</th>
+                        <th>First Response</th>
+                        <th title="Did the assignee respond within SLA after being assigned?">SLA Status</th>
                         <th>Open (days)</th>
                         <th>Resolution (days)</th>
                     </tr>
                 </thead>
                 <tbody id="issues-tbody">
-                    <tr><td colspan="12" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="11" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -479,6 +494,45 @@
             if (icon) {
                 icon.classList.toggle('expanded', !isExpanded);
             }
+        }
+
+        function toggleOnCallDetails(personId) {
+            const rows = document.querySelectorAll(`#${personId}-detail`);
+            const icon = document.getElementById(`icon-${personId}`);
+            const isExpanded = rows[0] && rows[0].style.display !== 'none';
+            
+            rows.forEach(row => {
+                row.style.display = isExpanded ? 'none' : 'table-row';
+            });
+            
+            if (icon) {
+                icon.classList.toggle('expanded', !isExpanded);
+            }
+        }
+
+        function toggleAllOnCallDetails() {
+            const allDetailRows = document.querySelectorAll('.oncall-detail-row');
+            const allIcons = document.querySelectorAll('[id^="icon-oncall-person-"]');
+            const toggleIcon = document.getElementById('toggle-all-icon');
+            
+            // Check if any are currently expanded
+            const anyExpanded = Array.from(allDetailRows).some(row => row.style.display !== 'none');
+            
+            // Toggle all to opposite state
+            allDetailRows.forEach(row => {
+                row.style.display = anyExpanded ? 'none' : 'table-row';
+            });
+            
+            allIcons.forEach(icon => {
+                if (anyExpanded) {
+                    icon.classList.remove('expanded');
+                } else {
+                    icon.classList.add('expanded');
+                }
+            });
+            
+            // Update button icon
+            toggleIcon.textContent = anyExpanded ? '▼' : '▲';
         }
 
         // Store all metrics data globally for filtering
@@ -586,25 +640,72 @@
                     onCallDisplay = `<span style="color: #dc3545; font-weight: bold;" title="Missed on-call response">${whoWasOnCall}</span>`;
                 }
                 
+                // Calculate Assignee SLA status
+                let assigneeSlaStatus = '--';
+                if (issue.sla && issue.sla.length > 0 && issue.firstAssignmentTime) {
+                    const firstSla = issue.sla[0];
+                    const goalMinutes = firstSla.goalDuration ? (firstSla.goalDuration / (1000 * 60)) : null;
+                    const goalHours = goalMinutes ? (goalMinutes / 60).toFixed(0) : '?';
+                    
+                    if (goalMinutes !== null) {
+                        if (issue.timeToFirstAssigneeCommentMinutes !== null) {
+                            // Assignee has commented - check if within SLA
+                            if (issue.timeToFirstAssigneeCommentMinutes > goalMinutes) {
+                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
+                            } else {
+                                assigneeSlaStatus = `<span style="color: #28a745;">✓ Met (${goalHours}h)</span>`;
+                            }
+                        } else if (issue.resolutionDate) {
+                            // No comment but ticket is resolved - check if resolved within SLA
+                            const assignmentDate = new Date(issue.firstAssignmentTime);
+                            const resolutionDate = new Date(issue.resolutionDate);
+                            const resolutionMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
+                            if (resolutionMinutes > goalMinutes) {
+                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
+                            } else {
+                                assigneeSlaStatus = `<span style="color: #28a745;">✓ Met (resolved)</span>`;
+                            }
+                        } else {
+                            // No comment and not resolved - check if overdue
+                            const assignmentDate = new Date(issue.firstAssignmentTime);
+                            const now = new Date();
+                            const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
+                            if (elapsedMinutes > goalMinutes) {
+                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Pending (overdue)</span>`;
+                            } else {
+                                const hoursRemaining = ((goalMinutes - elapsedMinutes) / 60).toFixed(1);
+                                assigneeSlaStatus = `<span style="color: #856404;">⏳ ${hoursRemaining}h left</span>`;
+                            }
+                        }
+                    }
+                } else if (!issue.firstAssignmentTime) {
+                    assigneeSlaStatus = '<span style="color: #999;">Not assigned</span>';
+                }
+                
+                // Format assignment date
+                const assignedDate = issue.firstAssignmentTime ? new Date(issue.firstAssignmentTime).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+                
+                // Format first response (assignee comment)
+                const firstResponse = issue.firstAssigneeCommentTime ? new Date(issue.firstAssigneeCommentTime).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+                
                 return `
                     <tr>
-                        <td><strong>${issue.key}</strong></td>
+                        <td><a href="https://m3gr.atlassian.net/browse/${issue.key}" target="_blank" style="color: #667eea; font-weight: bold; text-decoration: none;">${issue.key}</a></td>
                         <td>${issue.summary || ''}</td>
                         <td><span class="status-badge ${getStatusClass(issue.status)}">${issue.status || 'Unknown'}</span></td>
                         <td>${issue.priority || 'None'}</td>
                         <td>${issue.assigneeCurrent || 'Unassigned'}</td>
-                        <td>${assignedByDisplay}</td>
-                        <td>${onCallDisplay}</td>
                         <td style="font-size: 0.85em; color: #666;">${createdDate}</td>
-                        <td style="font-size: 0.85em; color: #667eea; font-weight: 500;">${firstAction}</td>
-                        <td>${slaStatus}</td>
+                        <td style="font-size: 0.85em; color: #667eea;">${assignedDate}</td>
+                        <td style="font-size: 0.85em; color: #667eea; font-weight: 500;">${firstResponse}</td>
+                        <td>${assigneeSlaStatus}</td>
                         <td>${minutesToDays(issue.openDurationMinutes)}</td>
                         <td>${minutesToDays(issue.timeToResolutionMinutes)}</td>
                     </tr>
                 `;
             }).join('');
             
-            tbody.innerHTML = rows || '<tr><td colspan="12" style="text-align:center; color:#999;">No issues found</td></tr>';
+            tbody.innerHTML = rows || '<tr><td colspan="11" style="text-align:center; color:#999;">No issues found</td></tr>';
         }
 
         async function loadLatestMetrics() {
@@ -823,12 +924,20 @@
                         
                         if (goalMinutes !== null) {
                             if (issue.timeToFirstAssigneeCommentMinutes !== null) {
-                                // Has responded - check if it was within SLA
+                                // Has commented - check if it was within SLA
                                 if (issue.timeToFirstAssigneeCommentMinutes > goalMinutes) {
                                     assigneeStats[assignee].breached++;
                                 }
+                            } else if (issue.resolutionDate) {
+                                // No comment but resolved - check if resolved within SLA
+                                const assignmentDate = new Date(issue.firstAssignmentTime);
+                                const resolutionDate = new Date(issue.resolutionDate);
+                                const resolutionMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
+                                if (resolutionMinutes > goalMinutes) {
+                                    assigneeStats[assignee].breached++;
+                                }
                             } else {
-                                // No response yet - check if overdue
+                                // No comment and not resolved - check if overdue
                                 const assignmentDate = new Date(issue.firstAssignmentTime);
                                 const now = new Date();
                                 const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
@@ -984,16 +1093,23 @@
                         
                         const rowStyle = stats.ticketsDuringShift === 0 ? 'color: #999; font-style: italic;' : '';
                         const hasBreaches = stats.breachedTickets.length > 0;
+                        const hasMet = stats.metTickets.length > 0;
+                        const hasDetails = hasBreaches || hasMet;
                         const personId = `oncall-person-${idx}`;
                         
-                        // Main row - clickable if has breaches
-                        const rowClass = hasBreaches ? 'expandable' : '';
-                        const rowClick = hasBreaches ? `onclick="toggleOnCallBreaches('${personId}')"` : '';
-                        const caret = hasBreaches ? `<span class="expand-icon" id="icon-${personId}">▶</span> ` : '';
+                        // Main row - clickable if has details
+                        const rowClass = hasDetails ? 'expandable' : '';
+                        const rowClick = hasDetails ? `onclick="toggleOnCallDetails('${personId}')"` : '';
+                        const caret = hasDetails ? `<span class="expand-icon" id="icon-${personId}">▶</span> ` : '';
+                        
+                        const detailsLabel = [];
+                        if (hasBreaches) detailsLabel.push(`${stats.breachedTickets.length} breached`);
+                        if (hasMet) detailsLabel.push(`${stats.metTickets.length} met`);
+                        const detailsText = detailsLabel.length > 0 ? ` <span style="color: #666; font-size: 0.85em;">(${detailsLabel.join(', ')})</span>` : '';
                         
                         oncallRowsHtml += `
                             <tr class="${rowClass}" ${rowClick} style="${rowStyle}">
-                                <td>${caret}<strong>${person}</strong>${hasBreaches ? ` <span style="color: #dc3545; font-size: 0.85em;">(${stats.breachedTickets.length} breached)</span>` : ''}</td>
+                                <td>${caret}<strong>${person}</strong>${detailsText}</td>
                                 <td style="text-align: center;">${stats.ticketsDuringShift}</td>
                                 <td style="text-align: center; color: #28a745; font-weight: bold;">${stats.respondedTo}</td>
                                 <td style="text-align: center; color: #856404;">${stats.someoneElseHandled}</td>
@@ -1017,7 +1133,7 @@
                                 const actionTypeStr = ticket.actionType === 'comment' ? 'commented' : 'assigned';
                                 
                                 oncallRowsHtml += `
-                                    <tr class="breach-row" id="${personId}-breach" style="display:none; background: #fff3f3;">
+                                    <tr class="oncall-detail-row" id="${personId}-detail" style="display:none; background: #fff3f3;">
                                         <td style="padding-left: 40px;">
                                             └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #dc3545; font-weight: bold; text-decoration: none;">${ticket.key}</a>
                                         </td>
@@ -1034,19 +1150,21 @@
                             });
                         }
                         
-                        // Met ticket rows (always visible)
-                        stats.metTickets.forEach(ticket => {
-                            oncallRowsHtml += `
-                                <tr style="background: #f0f9ff;">
-                                    <td style="padding-left: 40px;">
-                                        └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #28a745; font-weight: bold; text-decoration: none;">${ticket.key}</a>
-                                    </td>
-                                    <td colspan="3" style="font-size: 0.9em; color: #666;">${ticket.summary}</td>
-                                    <td colspan="2" style="text-align: center; color: #28a745;">✓ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)</td>
-                                    <td></td>
-                                </tr>
-                            `;
-                        });
+                        // Met ticket rows (now expandable)
+                        if (hasMet) {
+                            stats.metTickets.forEach(ticket => {
+                                oncallRowsHtml += `
+                                    <tr class="oncall-detail-row" id="${personId}-detail" style="display:none; background: #f0f9ff;">
+                                        <td style="padding-left: 40px;">
+                                            └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #28a745; font-weight: bold; text-decoration: none;">${ticket.key}</a>
+                                        </td>
+                                        <td colspan="3" style="font-size: 0.9em; color: #666;">${ticket.summary}</td>
+                                        <td colspan="2" style="text-align: center; color: #28a745;">✓ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)</td>
+                                        <td></td>
+                                    </tr>
+                                `;
+                            });
+                        }
                     });
                 
                 oncallTbody.innerHTML = oncallRowsHtml || '<tr><td colspan="7" style="text-align:center; color:#999;">No on-call data available</td></tr>';

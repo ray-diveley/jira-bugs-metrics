@@ -393,7 +393,7 @@
       const slaResults = ticketsWithSLA.map(ticket => {
         const sla = ticket.sla[0];
         const goalHours = sla.goalDuration / (1000 * 60 * 60);
-        const responseMinutes = ticket.timeToFirstManagerActionMinutes;
+        const responseMinutes = ticket.timeToFirstOnCallActionMinutes;
         
         if (responseMinutes === null) {
           const createdDate = new Date(ticket.created);
@@ -420,7 +420,7 @@
       });
       
       const metCount = slaResults.filter(r => r.met).length;
-      const breachedCount = slaResults.filter(r => !r.met && r.status === 'responded').length;
+      const breachedCount = slaResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
       const pendingCount = slaResults.filter(r => r.status === 'pending').length;
       const complianceRate = totalTickets > 0 ? (metCount / totalTickets) * 100 : 0;
       
@@ -478,9 +478,9 @@
         const dayName = days[new Date(m.created).getDay()];
         if (!dayAnalysis[dayName]) dayAnalysis[dayName] = { total: 0, met: 0, breached: 0 };
         dayAnalysis[dayName].total++;
-        if (m.sla && m.sla.length > 0 && m.timeToFirstManagerActionMinutes !== null) {
+        if (m.sla && m.sla.length > 0 && m.timeToFirstOnCallActionMinutes !== null) {
           const goalMinutes = m.sla[0].goalDuration / (1000 * 60);
-          if (m.timeToFirstManagerActionMinutes <= goalMinutes) dayAnalysis[dayName].met++;
+          if (m.timeToFirstOnCallActionMinutes <= goalMinutes) dayAnalysis[dayName].met++;
           else dayAnalysis[dayName].breached++;
         }
       });

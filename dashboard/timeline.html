@@ -537,10 +537,10 @@
                         personCounts[name] = (personCounts[name] || 0) + 1;
                         
                         // Check SLA status
-                        if (ticket.sla && ticket.sla.length > 0 && ticket.timeToFirstManagerActionMinutes !== null) {
+                        if (ticket.sla && ticket.sla.length > 0 && ticket.timeToFirstOnCallActionMinutes !== null) {
                             const goalMinutes = ticket.sla[0].goalDuration ? ticket.sla[0].goalDuration / (1000 * 60) : null;
                             if (goalMinutes !== null) {
-                                if (ticket.timeToFirstManagerActionMinutes > goalMinutes) {
+                                if (ticket.timeToFirstOnCallActionMinutes > goalMinutes) {
                                     personSLA[name].breached++;
                                 } else {
                                     personSLA[name].met++;
