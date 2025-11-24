@@ -1,5 +1,16 @@
 import { differenceInMinutes, parseISO } from 'date-fns';
 
+// Define on-call managers (must match kpi.js)
+const ON_CALL_MANAGERS = [
+  'Brad Goldberg',
+  'Jeff Maciorowski',
+  'Akshay Vijay Takkar',
+  'Grigoriy Semenenko',
+  'Randy Dahl',
+  'Evgeniy Suhov',
+  'Max Kuklin'
+];
+
 export function computeMetrics(issue) {
   const key = issue.key;
   const fields = issue.fields || {};
@@ -30,21 +41,57 @@ export function computeMetrics(issue) {
     }
   }
 
-    // Find first assignee assignment time and who assigned it
-    let firstAssignmentTime = null;
-    let assignedBy = null;
-    for (const h of histories) {
-        for (const item of h.items) {
-            if (item.field === 'assignee' && item.toString) {
-                firstAssignmentTime = h.created;
-                assignedBy = h.author && h.author.displayName ? h.author.displayName : 'Unknown';
-                break;
-            }
-        }
-        if (firstAssignmentTime) break;
+  // Find first assignee assignment time and who assigned it
+  let firstAssignmentTime = null;
+  let assignedBy = null;
+  for (const h of histories) {
+    for (const item of h.items) {
+      if (item.field === 'assignee' && item.toString) {
+        firstAssignmentTime = h.created;
+        assignedBy = h.author && h.author.displayName ? h.author.displayName : 'Unknown';
+        break;
+      }
     }
+    if (firstAssignmentTime) break;
+  }
 
-  // Find first manager comment (any comment from the person who assigned)
+  // Find first on-call action (assignment or comment from ANY on-call person)
+  let firstOnCallActionTime = null;
+  let firstOnCallActionType = null;
+  let onCallPersonWhoActedFirst = null;
+  
+  // Check all history items for assignments by on-call managers
+  for (const h of histories) {
+    const actorName = h.author && h.author.displayName ? h.author.displayName : null;
+    if (!actorName || !ON_CALL_MANAGERS.includes(actorName)) continue;
+    
+    for (const item of h.items) {
+      if (item.field === 'assignee' && item.toString) {
+        const actionTime = h.created;
+        if (!firstOnCallActionTime || parseISO(actionTime) < parseISO(firstOnCallActionTime)) {
+          firstOnCallActionTime = actionTime;
+          firstOnCallActionType = 'assignment';
+          onCallPersonWhoActedFirst = actorName;
+        }
+        break;
+      }
+    }
+  }
+  
+  // Check all comments for comments by on-call managers
+  for (const c of comments) {
+    const authorName = c.author && c.author.displayName ? c.author.displayName : null;
+    if (!authorName || !ON_CALL_MANAGERS.includes(authorName)) continue;
+    
+    const commentTime = c.created;
+    if (!firstOnCallActionTime || parseISO(commentTime) < parseISO(firstOnCallActionTime)) {
+      firstOnCallActionTime = commentTime;
+      firstOnCallActionType = 'comment';
+      onCallPersonWhoActedFirst = authorName;
+    }
+  }
+
+  // Legacy: Find first manager comment (any comment from the person who assigned)
   let firstManagerCommentTime = null;
   let managerCommentedBeforeAssignment = false;
   
@@ -63,28 +110,6 @@ export function computeMetrics(issue) {
         break;
       }
     }
-  }
-
-  // Determine first manager action (comment or assignment, whichever came first)
-  let firstManagerActionTime = null;
-  let firstManagerActionType = null;
-  
-  if (firstManagerCommentTime && firstAssignmentTime) {
-    const commentMoment = parseISO(firstManagerCommentTime);
-    const assignmentMoment = parseISO(firstAssignmentTime);
-    if (commentMoment < assignmentMoment) {
-      firstManagerActionTime = firstManagerCommentTime;
-      firstManagerActionType = 'comment';
-    } else {
-      firstManagerActionTime = firstAssignmentTime;
-      firstManagerActionType = 'assignment';
-    }
-  } else if (firstManagerCommentTime) {
-    firstManagerActionTime = firstManagerCommentTime;
-    firstManagerActionType = 'comment';
-  } else if (firstAssignmentTime) {
-    firstManagerActionTime = firstAssignmentTime;
-    firstManagerActionType = 'assignment';
   }
 
   // Determine first assignee comment time after assignment
@@ -109,9 +134,9 @@ export function computeMetrics(issue) {
     ? safeDiffMinutes(firstAssignmentTime, firstAssigneeCommentTime)
     : null;
   
-  // Calculate manager response metrics
-  const timeToFirstManagerActionMinutes = firstManagerActionTime 
-    ? safeDiffMinutes(created, firstManagerActionTime)
+  // Calculate on-call response metrics
+  const timeToFirstOnCallActionMinutes = firstOnCallActionTime 
+    ? safeDiffMinutes(created, firstOnCallActionTime)
     : null;
   const timeToAssignmentMinutes = firstAssignmentTime
     ? safeDiffMinutes(created, firstAssignmentTime)
@@ -179,10 +204,10 @@ export function computeMetrics(issue) {
     firstAssigneeCommentTime,
     assignedBy,
     firstManagerCommentTime,
-    firstManagerActionTime,
-    firstManagerActionType,
+    firstOnCallActionTime,
+    firstOnCallActionType,
     managerCommentedBeforeAssignment,
-    timeToFirstManagerActionMinutes,
+    timeToFirstOnCallActionMinutes,
     timeToAssignmentMinutes,
     timeToManagerCommentMinutes,
     sla: slaData,

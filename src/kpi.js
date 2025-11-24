@@ -5,40 +5,92 @@
 export function calculateSLAKPIs(metricsData) {
   const { metrics } = metricsData;
   
+  // Define on-call managers
+  const ON_CALL_MANAGERS = [
+    'Brad Goldberg',
+    'Jeff Maciorowski',
+    'Akshay Vijay Takkar',
+    'Grigoriy Semenenko',
+    'Randy Dahl',
+    'Evgeniy Suhov',
+    'Max Kuklin'
+  ];
+  
   // Overall SLA Performance
   const totalTickets = metrics.length;
   const ticketsWithSLA = metrics.filter(m => m.sla && m.sla.length > 0);
   
-  // Calculate SLA compliance based on manager response time
-  const slaResults = ticketsWithSLA.map(ticket => {
+  // Calculate SLA compliance
+  // Track BOTH on-call manager response AND assignee response
+  const slaResults = [];
+  
+  ticketsWithSLA.forEach(ticket => {
     const sla = ticket.sla[0]; // First SLA entry
     const goalHours = sla.goalDuration / (1000 * 60 * 60);
-    const responseMinutes = ticket.timeToFirstManagerActionMinutes;
+    const goalMinutes = goalHours * 60;
     
-    // If no manager action yet, check if still within SLA window
-    if (responseMinutes === null) {
-      const createdDate = new Date(ticket.created);
-      const now = new Date();
-      const elapsedMinutes = (now - createdDate) / (1000 * 60);
-      return {
-        ticket: ticket.key,
-        manager: ticket.assignedBy || 'Unassigned',
-        met: elapsedMinutes <= (goalHours * 60),
-        responseMinutes: null,
-        goalMinutes: goalHours * 60,
-        status: 'pending'
-      };
+    // Track the on-call manager (person who first responded/assigned)
+    if (ticket.assignedBy && ON_CALL_MANAGERS.includes(ticket.assignedBy)) {
+      const onCallResponseMinutes = ticket.timeToFirstOnCallActionMinutes;
+      
+      if (onCallResponseMinutes === null) {
+        const createdDate = new Date(ticket.created);
+        const now = new Date();
+        const elapsedMinutes = (now - createdDate) / (1000 * 60);
+        slaResults.push({
+          ticket: ticket.key,
+          manager: ticket.assignedBy,
+          role: 'on-call',
+          met: elapsedMinutes <= goalMinutes,
+          responseMinutes: null,
+          goalMinutes,
+          status: 'pending'
+        });
+      } else {
+        slaResults.push({
+          ticket: ticket.key,
+          manager: ticket.assignedBy,
+          role: 'on-call',
+          met: onCallResponseMinutes <= goalMinutes,
+          responseMinutes: onCallResponseMinutes,
+          goalMinutes,
+          status: 'responded'
+        });
+      }
     }
     
-    const met = responseMinutes <= (goalHours * 60);
-    return {
-      ticket: ticket.key,
-      manager: ticket.assignedBy || 'Unknown',
-      met,
-      responseMinutes,
-      goalMinutes: goalHours * 60,
-      status: 'responded'
-    };
+    // Track the assignee response (if different from on-call manager and is also a manager)
+    if (ticket.assigneeCurrent && 
+        ticket.assigneeCurrent !== ticket.assignedBy &&
+        ON_CALL_MANAGERS.includes(ticket.assigneeCurrent) &&
+        ticket.firstAssignmentTime) {
+      const assigneeResponseMinutes = ticket.timeToFirstAssigneeCommentMinutes;
+      
+      if (assigneeResponseMinutes === null) {
+        const assignmentDate = new Date(ticket.firstAssignmentTime);
+        const now = new Date();
+        const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
+        slaResults.push({
+          ticket: ticket.key,
+          manager: ticket.assigneeCurrent,
+          role: 'assignee',
+          met: elapsedMinutes <= goalMinutes,
+          responseMinutes: null,
+          goalMinutes,
+          status: 'pending'
+        });
+      } else {
+        slaResults.push({
+          ticket: ticket.key,
+          manager: ticket.assigneeCurrent,
+          role: 'assignee',
+          met: assigneeResponseMinutes <= goalMinutes,
+          responseMinutes: assigneeResponseMinutes,
+          goalMinutes,
+          status: 'responded'
+        });
+      }
+    }
   });
   
   const metCount = slaResults.filter(r => r.met).length;
@@ -120,9 +172,9 @@ function analyzeByDayOfWeek(metrics) {
     
     analysis[dayName].total++;
     
-    if (m.sla && m.sla.length > 0 && m.timeToFirstManagerActionMinutes !== null) {
-      const goalMinutes = (m.sla[0].goalDuration / (1000 * 60));
-      if (m.timeToFirstManagerActionMinutes <= goalMinutes) {
+    if (m.sla && m.sla.length > 0 && m.timeToFirstOnCallActionMinutes !== null) {
+      const goalMinutes = m.sla[0].goalDuration / (1000 * 60);
+      if (m.timeToFirstOnCallActionMinutes <= goalMinutes) {
         analysis[dayName].met++;
       } else {
         analysis[dayName].breached++;
@@ -150,9 +202,9 @@ function analyzeByHourOfDay(metrics) {
     
     analysis[hour].total++;
     
-    if (m.sla && m.sla.length > 0 && m.timeToFirstManagerActionMinutes !== null) {
+    if (m.sla && m.sla.length > 0 && m.timeToFirstOnCallActionMinutes !== null) {
       const goalMinutes = (m.sla[0].goalDuration / (1000 * 60));
-      if (m.timeToFirstManagerActionMinutes <= goalMinutes) {
+      if (m.timeToFirstOnCallActionMinutes <= goalMinutes) {
         analysis[hour].met++;
       } else {
         analysis[hour].breached++;

@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Timeline - Jira Bug Metrics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            color: #718096;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+        
+        .nav-buttons {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .nav-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 0 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        
+        .nav-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .summary-card h3 {
+            font-size: 2.5em;
+            margin-bottom: 5px;
+        }
+        
+        .summary-card p {
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+            margin-top: 40px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, #667eea, #764ba2);
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 15px;
+            padding: 15px 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .timeline-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .timeline-item.expanded {
+            margin-bottom: 20px;
+        }
+        
+        .ticket-summary {
+            display: none;
+            color: #4a5568;
+            font-size: 0.9em;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .timeline-item.expanded .ticket-summary {
+            display: block;
+        }
+        
+        .expand-caret {
+            display: inline-block;
+            margin-right: 8px;
+            transition: transform 0.3s;
+            font-size: 0.8em;
+        }
+        
+        .timeline-item.expanded .expand-caret {
+            transform: rotate(90deg);
+        }
+        
+        .timeline-item.oncall {
+            border-left-color: #48bb78;
+            background: #f0fff4;
+        }
+        
+        .timeline-item.outside {
+            border-left-color: #ed8936;
+            background: #fffaf0;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -44px;
+            top: 25px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #667eea;
+        }
+        
+        .timeline-item.oncall::before {
+            border-color: #48bb78;
+        }
+        
+        .timeline-item.outside::before {
+            border-color: #ed8936;
+        }
+        
+        .ticket-key {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #2d3748;
+            text-decoration: none;
+            display: inline-block;
+            margin-right: 10px;
+        }
+        
+        .ticket-key:hover {
+            color: #667eea;
+            text-decoration: underline;
+        }
+        
+        .ticket-date {
+            color: #4a5568;
+            font-size: 0.95em;
+            margin: 5px 0;
+        }
+        
+        .ticket-shift {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+        
+        .ticket-shift.oncall {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .ticket-shift.outside {
+            background: #ed8936;
+            color: white;
+        }
+        
+        .person-summary {
+            background: #edf2f7;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        
+        .person-summary h2 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        .person-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .person-item {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .person-item.zero {
+            opacity: 0.6;
+            border-left-color: #cbd5e0;
+        }
+        
+        .person-name {
+            font-weight: bold;
+            color: #2d3748;
+            margin-bottom: 5px;
+        }
+        
+        .person-count {
+            color: #4a5568;
+            font-size: 0.9em;
+        }
+        
+        .person-sla {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 0.85em;
+        }
+        
+        .sla-good {
+            color: #48bb78;
+            font-weight: 600;
+        }
+        
+        .sla-bad {
+            color: #e53e3e;
+            font-weight: 600;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin: 30px 0;
+            padding: 20px;
+            background: #edf2f7;
+            border-radius: 8px;
+        }
+        
+        .pagination button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+        
+        .pagination button:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        
+        .pagination button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .pagination span {
+            color: #4a5568;
+            font-weight: 500;
+        }
+        
+        .page-size {
+            margin-left: 20px;
+        }
+        
+        .page-size select {
+            padding: 8px 12px;
+            border: 2px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🕐 Ticket Creation Timeline</h1>
+        <p class="subtitle" id="date-range">Loading...</p>
+        
+        <div class="nav-buttons">
+            <button class="nav-btn" onclick="location.href='index.html'">← Back to Dashboard</button>
+            <button class="nav-btn" onclick="loadTimeline()">🔄 Refresh</button>
+        </div>
+        
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h3 id="total-tickets">--</h3>
+                <p>Total Tickets</p>
+            </div>
+            <div class="summary-card" style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);">
+                <h3 id="oncall-tickets">--</h3>
+                <p>During On-Call Hours</p>
+            </div>
+            <div class="summary-card" style="background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);">
+                <h3 id="outside-tickets">--</h3>
+                <p>Outside Coverage</p>
+            </div>
+        </div>
+        
+        <div class="pagination">
+            <button id="prev-btn" onclick="changePage(-1)">← Previous</button>
+            <span id="page-info">Page 1</span>
+            <button id="next-btn" onclick="changePage(1)">Next →</button>
+            <div class="page-size">
+                <label for="page-size-select">Show: </label>
+                <select id="page-size-select" onchange="changePageSize()">
+                    <option value="10">10 per page</option>
+                    <option value="25" selected>25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100">100 per page</option>
+                    <option value="all">All</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="timeline" id="timeline">
+            <!-- Timeline items will be inserted here -->
+        </div>
+        
+        <div class="person-summary">
+            <h2>📊 Summary by On-Call Person</h2>
+            <div class="person-list" id="person-summary">
+                <!-- Person summaries will be inserted here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let allTickets = [];
+        let currentPage = 1;
+        let pageSize = 25;
+        
+        const emailToNameMap = {
+            'bgoldberg': 'Brad Goldberg',
+            'jmaciorowski': 'Jeff Maciorowski',
+            'atakkar': 'Akshay Vijay Takkar',
+            'gsemenenko': 'Grigoriy Semenenko',
+            'rdahl': 'Randy Dahl',
+            'esuhov': 'Evgeniy Suhov',
+            'mkulkin': 'Max Kuklin'
+        };
+        
+        const shiftSchedule = {
+            'atakkar': '7am-9am UTC',
+            'esuhov': '9am-11am UTC',
+            'mkulkin': '11am-1pm UTC',
+            'gsemenenko': '1pm-3pm UTC',
+            'bgoldberg': '3pm-5pm UTC',
+            'rdahl': '5pm-7pm UTC',
+            'jmaciorowski': '7pm-11pm UTC'
+        };
+        
+        function formatDate(dateString) {
+            const d = new Date(dateString);
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            const dow = days[d.getUTCDay()];
+            const month = months[d.getUTCMonth()];
+            const day = d.getUTCDate();
+            const hour = d.getUTCHours();
+            const min = d.getUTCMinutes().toString().padStart(2, '0');
+            
+            return `${dow} ${month} ${day}, ${hour}:${min} UTC`;
+        }
+        
+        function changePage(delta) {
+            const totalPages = Math.ceil(allTickets.length / pageSize);
+            currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+            renderTimeline();
+        }
+        
+        function changePageSize() {
+            const select = document.getElementById('page-size-select');
+            pageSize = select.value === 'all' ? allTickets.length : parseInt(select.value);
+            currentPage = 1;
+            renderTimeline();
+        }
+        
+        function toggleTicket(ticketId) {
+            const element = document.getElementById(ticketId);
+            if (element) {
+                element.classList.toggle('expanded');
+            }
+        }
+        
+        function renderTimeline() {
+            const timeline = document.getElementById('timeline');
+            const startIdx = (currentPage - 1) * pageSize;
+            const endIdx = Math.min(startIdx + pageSize, allTickets.length);
+            const pageTickets = allTickets.slice(startIdx, endIdx);
+            const totalPages = Math.ceil(allTickets.length / pageSize);
+            
+            // Update pagination controls
+            document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages} (${allTickets.length} total tickets)`;
+            document.getElementById('prev-btn').disabled = currentPage === 1;
+            document.getElementById('next-btn').disabled = currentPage === totalPages;
+            
+            // Render timeline items
+            timeline.innerHTML = pageTickets.map((ticket, idx) => {
+                const whoWasOnCall = ticket.whoWasOnCall;
+                const isOutside = !whoWasOnCall || whoWasOnCall.startsWith('[');
+                const itemClass = isOutside ? 'outside' : 'oncall';
+                const ticketId = `ticket-${startIdx + idx}`;
+                
+                let shiftInfo = '';
+                if (whoWasOnCall) {
+                    if (whoWasOnCall === '[Weekend]') {
+                        shiftInfo = '<span class="ticket-shift outside">🚫 Weekend</span>';
+                    } else if (whoWasOnCall === '[After Hours]') {
+                        shiftInfo = '<span class="ticket-shift outside">🌙 After Hours</span>';
+                    } else if (whoWasOnCall === '[Before Oct 31]') {
+                        shiftInfo = '<span class="ticket-shift outside">📅 Before schedule</span>';
+                    } else {
+                        const name = emailToNameMap[whoWasOnCall] || whoWasOnCall;
+                        const shift = shiftSchedule[whoWasOnCall] || '';
+                        shiftInfo = `<span class="ticket-shift oncall">✓ ${name}${shift ? ' (' + shift + ')' : ''}</span>`;
+                    }
+                }
+                
+                return `
+                    <div class="timeline-item ${itemClass}" id="${ticketId}" onclick="toggleTicket('${ticketId}')">
+                        <div>
+                            <span class="expand-caret">▶</span>
+                            <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" class="ticket-key" onclick="event.stopPropagation()">${ticket.key}</a>
+                            <span style="color: #718096; font-size: 0.9em;">${formatDate(ticket.created)}</span>
+                            ${shiftInfo}
+                        </div>
+                        <div class="ticket-summary">${ticket.summary || 'No description'}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Scroll to top of timeline
+            timeline.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        async function loadTimeline() {
+            try {
+                // Get latest metrics file
+                const listResponse = await fetch('/api/metrics-files');
+                const filesList = await listResponse.json();
+                const latestFile = filesList.files[filesList.files.length - 1];
+                
+                const response = await fetch(`/data/${latestFile}`);
+                const data = await response.json();
+                
+                // Get date range
+                const saved = JSON.parse(localStorage.getItem('jiraConfig') || '{}');
+                const dateRangeText = saved.startDate && saved.endDate 
+                    ? `${saved.startDate} to ${saved.endDate}`
+                    : 'Date range not configured';
+                document.getElementById('date-range').textContent = dateRangeText;
+                
+                // Sort tickets by creation date (newest first)
+                const sortedTickets = [...data.metrics].sort((a, b) => 
+                    new Date(b.created) - new Date(a.created)
+                );
+                
+                allTickets = sortedTickets;
+                currentPage = 1;
+                
+                // Count tickets and SLA stats
+                let onCallCount = 0;
+                let outsideCount = 0;
+                const personCounts = {};
+                const personSLA = {};
+                
+                // Initialize all people with 0
+                Object.values(emailToNameMap).forEach(name => {
+                    personCounts[name] = 0;
+                    personSLA[name] = { met: 0, breached: 0 };
+                });
+                
+                sortedTickets.forEach(ticket => {
+                    const whoWasOnCall = ticket.whoWasOnCall;
+                    if (whoWasOnCall && whoWasOnCall.startsWith('[')) {
+                        outsideCount++;
+                    } else if (whoWasOnCall) {
+                        onCallCount++;
+                        const name = emailToNameMap[whoWasOnCall] || whoWasOnCall;
+                        personCounts[name] = (personCounts[name] || 0) + 1;
+                        
+                        // Check SLA status
+                        if (ticket.sla && ticket.sla.length > 0 && ticket.timeToFirstManagerActionMinutes !== null) {
+                            const goalMinutes = ticket.sla[0].goalDuration ? ticket.sla[0].goalDuration / (1000 * 60) : null;
+                            if (goalMinutes !== null) {
+                                if (ticket.timeToFirstManagerActionMinutes > goalMinutes) {
+                                    personSLA[name].breached++;
+                                } else {
+                                    personSLA[name].met++;
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Update summary
+                document.getElementById('total-tickets').textContent = sortedTickets.length;
+                document.getElementById('oncall-tickets').textContent = onCallCount;
+                document.getElementById('outside-tickets').textContent = outsideCount;
+                
+                // Render initial timeline
+                renderTimeline();
+                
+                // Build person summary with SLA stats
+                const personSummary = document.getElementById('person-summary');
+                personSummary.innerHTML = Object.entries(personCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, count]) => {
+                        const zeroClass = count === 0 ? 'zero' : '';
+                        const sla = personSLA[name];
+                        const total = sla.met + sla.breached;
+                        const percentage = total > 0 ? ((sla.met / total) * 100).toFixed(0) : '--';
+                        const slaClass = percentage !== '--' && percentage >= 80 ? 'sla-good' : 'sla-bad';
+                        
+                        let slaHtml = '';
+                        if (total > 0) {
+                            slaHtml = `
+                                <div class="person-sla">
+                                    SLA: <span class="${slaClass}">${percentage}%</span> 
+                                    <span style="color: #718096;">(${sla.met} met, ${sla.breached} breached)</span>
+                                </div>
+                            `;
+                        }
+                        
+                        return `
+                            <div class="person-item ${zeroClass}">
+                                <div class="person-name">${name}</div>
+                                <div class="person-count">${count} ticket${count !== 1 ? 's' : ''}</div>
+                                ${slaHtml}
+                            </div>
+                        `;
+                    }).join('');
+                
+                // Add outside coverage summary
+                if (outsideCount > 0) {
+                    personSummary.innerHTML += `
+                        <div class="person-item" style="border-left-color: #ed8936; grid-column: 1 / -1;">
+                            <div class="person-name">Outside Coverage</div>
+                            <div class="person-count">${outsideCount} ticket${outsideCount !== 1 ? 's' : ''}</div>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Error loading timeline:', error);
+                document.getElementById('timeline').innerHTML = `
+                    <div style="text-align: center; color: #e53e3e; padding: 40px;">
+                        Error loading timeline: ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        // Load on page load
+        window.addEventListener('load', loadTimeline);
+    </script>
+</body>
+</html>

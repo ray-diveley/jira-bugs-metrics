@@ -247,11 +247,36 @@
             <button class="load-btn" onclick="loadLatestMetrics()">🔄 Refresh Metrics</button>
             <button class="config-btn" onclick="openConfig()">⚙️ Configure Dates</button>
             <button class="config-btn" onclick="runMetrics()">▶️ Run Collection</button>
+            <button class="load-btn" onclick="location.href='timeline.html'" style="background: #9f7aea;">🕐 Timeline</button>
             <button class="load-btn" onclick="location.href='kpi.html'" style="background: #48bb78;">📊 SLA KPIs</button>
             <button class="load-btn" onclick="location.href='trends.html'" style="background: #ed8936;">📈 Trends</button>
         </div>
         
         <div id="error-msg" class="error" style="display:none;"></div>
+        
+        <!-- Ticket Creation Overview -->
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h2 style="margin: 0 0 15px 0; font-size: 1.3em;">📋 Ticket Creation Overview</h2>
+            <div id="ticket-overview" style="font-size: 1em; line-height: 1.8;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div>
+                        <strong style="font-size: 2em; display: block;" id="overview-total">--</strong>
+                        <span style="opacity: 0.9;">Total Tickets</span>
+                    </div>
+                    <div>
+                        <strong style="font-size: 2em; display: block; color: #48bb78;" id="overview-oncall">--</strong>
+                        <span style="opacity: 0.9;">During On-Call Hours</span>
+                    </div>
+                    <div>
+                        <strong style="font-size: 2em; display: block; color: #fbd38d;" id="overview-outside">--</strong>
+                        <span style="opacity: 0.9;">Outside Coverage</span>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.3);">
+                    <div id="overview-breakdown" style="font-size: 0.95em; opacity: 0.95;"></div>
+                </div>
+            </div>
+        </div>
         
         <div class="metrics-grid">
             <div class="metric-card">
@@ -275,30 +300,48 @@
             </div>
         </div>
 
+        <div class="metrics-grid" style="margin-bottom: 30px;">
+            <div class="metric-card" style="border-left: 4px solid #48bb78;">
+                <div class="metric-label">On-Call Hours SLA</div>
+                <div class="metric-value" id="oncall-sla">--</div>
+                <div class="metric-unit" style="font-size: 0.85em;">tickets during coverage</div>
+            </div>
+            <div class="metric-card" style="border-left: 4px solid #ed8936;">
+                <div class="metric-label">After-Hours SLA</div>
+                <div class="metric-value" id="afterhours-sla">--</div>
+                <div class="metric-unit" style="font-size: 0.85em;">tickets outside coverage</div>
+            </div>
+            <div class="metric-card" style="border-left: 4px solid #667eea;">
+                <div class="metric-label">Overall SLA</div>
+                <div class="metric-value" id="overall-sla">--</div>
+                <div class="metric-unit" style="font-size: 0.85em;">all tickets</div>
+            </div>
+        </div>
+
         <div class="issues-table" style="margin-bottom: 30px;">
-            <h2 style="margin-bottom: 20px; color: #333;">📞 Manager Response Patterns (by SLA)</h2>
+            <h2 style="margin-bottom: 10px; color: #333;">📞 On-call Performance</h2>
+            <div style="font-size: 1.3em; font-weight: bold; color: #667eea; margin-bottom: 15px;" id="oncall-date-range">
+                Loading date range...
+            </div>
             <p style="color: #666; font-size: 0.9em; margin-bottom: 15px; font-style: italic;">
-                ℹ️ Note: This tracks ALL manager actions across all times, not just during on-call shifts. 
-                💬 = Manager commented first (good communication). 👤 = Manager assigned directly (fast delegation).
+                ℹ️ Tracks who was scheduled on-call vs who actually responded to tickets<br>
+                <strong>Schedule Coverage:</strong> Mon-Fri, 7:00 AM - 11:00 PM UTC (started Oct 31, 2025)<br>
+                <span style="font-size: 0.85em; color: #999;">Gaps shown as: [Weekend], [After Hours] (11pm-7am UTC), [Before Oct 31]</span>
             </p>
             <table>
                 <thead>
                     <tr>
-                        <th>Manager / Ticket</th>
-                        <th>Summary</th>
-                        <th>Assigned To</th>
-                        <th>Created</th>
-                        <th>First Action</th>
-                        <th>SLA Status</th>
-                        <th>Action Type</th>
-                        <th>Response (hours)</th>
-                        <th>Open (days)</th>
-                        <th>Resolved</th>
-                        <th>Resolution Time (days)</th>
+                        <th>On-call Person</th>
+                        <th>Tickets During Shifts</th>
+                        <th>Responded To</th>
+                        <th>Someone Else Handled</th>
+                        <th>No Response Yet</th>
+                        <th>Compliance Rate</th>
+                        <th>Avg Response Time</th>
                     </tr>
                 </thead>
                 <tbody id="oncall-tbody">
-                    <tr><td colspan="11" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="7" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -312,11 +355,12 @@
                         <th>Total Assigned</th>
                         <th>Active (Not Done)</th>
                         <th>Completed</th>
+                        <th>SLA Breached</th>
                         <th>Avg Resolution Time (days)</th>
                     </tr>
                 </thead>
                 <tbody id="assignee-tbody">
-                    <tr><td colspan="5" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="6" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -329,6 +373,10 @@
                     <option value="">All Assignees</option>
                 </select>
             </div>
+            <p style="color: #666; font-size: 0.85em; margin-top: 10px; font-style: italic;">
+                💡 "Who Was On-Call" shows scheduled on-call person from Opsgenie<br>
+                <span style="font-size: 0.9em;">Schedule: Mon-Fri, 7am-11pm UTC (started Oct 31, 2025). Labels: [Weekend], [After Hours], [Before Oct 31]</span>
+            </p>
             <table>
                 <thead>
                     <tr>
@@ -337,6 +385,8 @@
                         <th>Status</th>
                         <th>Priority</th>
                         <th>Assignee</th>
+                        <th>Assigned By</th>
+                        <th>Who Was On-Call</th>
                         <th>Created</th>
                         <th>First Action</th>
                         <th>SLA Status</th>
@@ -345,7 +395,7 @@
                     </tr>
                 </thead>
                 <tbody id="issues-tbody">
-                    <tr><td colspan="10" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="12" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -417,6 +467,20 @@
             }
         }
 
+        function toggleOnCallBreaches(personId) {
+            const rows = document.querySelectorAll(`#${personId}-breach`);
+            const icon = document.getElementById(`icon-${personId}`);
+            const isExpanded = rows[0] && rows[0].style.display !== 'none';
+            
+            rows.forEach(row => {
+                row.style.display = isExpanded ? 'none' : 'table-row';
+            });
+            
+            if (icon) {
+                icon.classList.toggle('expanded', !isExpanded);
+            }
+        }
+
         // Store all metrics data globally for filtering
         let allMetricsData = [];
 
@@ -439,15 +503,29 @@
                 let slaStatus = '--';
                 if (issue.sla && issue.sla.length > 0) {
                     const firstSla = issue.sla[0];
-                    const goalHours = firstSla.goalDuration ? (firstSla.goalDuration / (1000 * 60 * 60)).toFixed(0) : '?';
+                    const goalMinutes = firstSla.goalDuration ? (firstSla.goalDuration / (1000 * 60)) : null;
+                    const goalHours = goalMinutes ? (goalMinutes / 60).toFixed(0) : '?';
                     
-                    if (firstSla.breached) {
-                        slaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
-                    } else if (firstSla.remainingTime !== null && firstSla.remainingTime > 0) {
-                        const hoursRemaining = (firstSla.remainingTime / (1000 * 60 * 60)).toFixed(1);
-                        slaStatus = `<span style="color: #28a745;">✓ ${hoursRemaining}h left (${goalHours}h goal)</span>`;
-                    } else if (firstSla.elapsedTime !== null) {
-                        slaStatus = `<span style="color: #28a745;">✓ Met (${goalHours}h)</span>`;
+                    // Recalculate SLA status based on ON-CALL response time
+                    if (goalMinutes !== null && issue.timeToFirstOnCallActionMinutes !== null) {
+                        if (issue.timeToFirstOnCallActionMinutes > goalMinutes) {
+                            slaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
+                        } else {
+                            slaStatus = `<span style="color: #28a745;">✓ Met (${goalHours}h)</span>`;
+                        }
+                    } else if (issue.timeToFirstOnCallActionMinutes === null) {
+                        // No manager action yet - check if overdue
+                        const createdDate = new Date(issue.created);
+                        const now = new Date();
+                        const elapsedMinutes = (now - createdDate) / (1000 * 60);
+                        if (elapsedMinutes > goalMinutes) {
+                            slaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Pending (overdue)</span>`;
+                        } else {
+                            const hoursRemaining = ((goalMinutes - elapsedMinutes) / 60).toFixed(1);
+                            slaStatus = `<span style="color: #856404;">⏳ ${hoursRemaining}h left</span>`;
+                        }
+                    } else {
+                        slaStatus = `<span style="color: #666;">Goal: ${goalHours}h</span>`;
                     }
                 }
                 
@@ -467,6 +545,47 @@
                     firstAction = earliest.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                 }
                 
+                // Map email usernames to full names for display
+                const emailToNameMap = {
+                    'bgoldberg': 'Brad Goldberg',
+                    'jmaciorowski': 'Jeff Maciorowski',
+                    'atakkar': 'Akshay Vijay Takkar',
+                    'gsemenenko': 'Grigoriy Semenenko',
+                    'rdahl': 'Randy Dahl',
+                    'esuhov': 'Evgeniy Suhov',
+                    'mkulkin': 'Max Kuklin'
+                };
+                
+                // Highlight on-call mismatch
+                const assignedBy = issue.assignedBy || '--';
+                const whoWasOnCallEmail = issue.whoWasOnCall;
+                
+                // Check if it's a special label (Weekend, After Hours, etc.)
+                const isSpecialLabel = whoWasOnCallEmail && (
+                    whoWasOnCallEmail.startsWith('[') && whoWasOnCallEmail.endsWith(']')
+                );
+                
+                const whoWasOnCall = whoWasOnCallEmail ? (
+                    isSpecialLabel ? whoWasOnCallEmail : (emailToNameMap[whoWasOnCallEmail] || whoWasOnCallEmail)
+                ) : '--';
+                
+                let assignedByDisplay = assignedBy;
+                let onCallDisplay = whoWasOnCall;
+                
+                // Style special labels differently
+                if (isSpecialLabel) {
+                    onCallDisplay = `<span style="color: #999; font-style: italic; font-size: 0.9em;">${whoWasOnCall}</span>`;
+                    // Don't flag as mismatch if it's a special case
+                } else if (assignedBy !== '--' && whoWasOnCall !== '--' && assignedBy !== whoWasOnCall) {
+                    // If we have both values and they differ, highlight the mismatch
+                    assignedByDisplay = `<span style="color: #dc3545; font-weight: bold;" title="Wrong person responded - ${whoWasOnCall} was on-call">⚠️ ${assignedBy}</span>`;
+                    onCallDisplay = `<span style="color: #28a745; font-weight: bold;">${whoWasOnCall}</span>`;
+                } else if (assignedBy === '--' && whoWasOnCall !== '--') {
+                    // If no one responded but someone was on-call, highlight as missed
+                    assignedByDisplay = '<span style="color: #dc3545;" title="No response from on-call person">❌ No response</span>';
+                    onCallDisplay = `<span style="color: #dc3545; font-weight: bold;" title="Missed on-call response">${whoWasOnCall}</span>`;
+                }
+                
                 return `
                     <tr>
                         <td><strong>${issue.key}</strong></td>
@@ -474,6 +593,8 @@
                         <td><span class="status-badge ${getStatusClass(issue.status)}">${issue.status || 'Unknown'}</span></td>
                         <td>${issue.priority || 'None'}</td>
                         <td>${issue.assigneeCurrent || 'Unassigned'}</td>
+                        <td>${assignedByDisplay}</td>
+                        <td>${onCallDisplay}</td>
                         <td style="font-size: 0.85em; color: #666;">${createdDate}</td>
                         <td style="font-size: 0.85em; color: #667eea; font-weight: 500;">${firstAction}</td>
                         <td>${slaStatus}</td>
@@ -483,7 +604,7 @@
                 `;
             }).join('');
             
-            tbody.innerHTML = rows || '<tr><td colspan="10" style="text-align:center; color:#999;">No issues found</td></tr>';
+            tbody.innerHTML = rows || '<tr><td colspan="12" style="text-align:center; color:#999;">No issues found</td></tr>';
         }
 
         async function loadLatestMetrics() {
@@ -524,13 +645,145 @@
                     ? `(${saved.startDate} to ${saved.endDate})`
                     : '';
                 document.getElementById('date-range').textContent = dateRangeText;
+                document.getElementById('oncall-date-range').textContent = saved.startDate && saved.endDate 
+                    ? `Date Range: ${saved.startDate} to ${saved.endDate}`
+                    : 'Date Range: Not configured';
                 
                 // Update summary metrics
                 document.getElementById('total-count').textContent = data.summary.count || 0;
                 document.getElementById('avg-open').textContent = minutesToDays(data.summary.avgOpenDurationMinutes);
                 document.getElementById('avg-resolution').textContent = minutesToDays(data.summary.avgTimeToResolutionMinutes);
                 document.getElementById('avg-comment').textContent = minutesToDays(data.summary.avgTimeToFirstAssigneeCommentMinutes);
-                document.getElementById('timestamp').textContent = `Last updated: ${new Date(data.generatedAt).toLocaleString()}`;
+                document.getElementById('timestamp').textContent = `Last Updated: ${new Date(data.generatedAt).toLocaleString()}`;
+                
+                // Calculate ticket creation overview
+                let onCallCount = 0;
+                let outsideCount = 0;
+                const breakdownByPerson = {};
+                const outsideReasons = { weekend: 0, afterHours: 0, beforeSchedule: 0 };
+                
+                data.metrics.forEach(issue => {
+                    const whoWasOnCall = issue.whoWasOnCall;
+                    if (whoWasOnCall) {
+                        if (whoWasOnCall.startsWith('[') && whoWasOnCall.endsWith(']')) {
+                            // Outside coverage
+                            outsideCount++;
+                            if (whoWasOnCall === '[Weekend]') outsideReasons.weekend++;
+                            else if (whoWasOnCall === '[After Hours]') outsideReasons.afterHours++;
+                            else if (whoWasOnCall === '[Before Oct 31]') outsideReasons.beforeSchedule++;
+                        } else {
+                            // During on-call hours
+                            onCallCount++;
+                            breakdownByPerson[whoWasOnCall] = (breakdownByPerson[whoWasOnCall] || 0) + 1;
+                        }
+                    }
+                });
+                
+                // Email to name mapping
+                const emailToName = {
+                    'bgoldberg': 'Brad',
+                    'jmaciorowski': 'Jeff',
+                    'atakkar': 'Akshay',
+                    'gsemenenko': 'Grigoriy',
+                    'rdahl': 'Randy',
+                    'esuhov': 'Evgeniy',
+                    'mkulkin': 'Max'
+                };
+                
+                // Update overview section
+                document.getElementById('overview-total').textContent = data.summary.count || 0;
+                document.getElementById('overview-oncall').textContent = onCallCount;
+                document.getElementById('overview-outside').textContent = outsideCount;
+                
+                // Build breakdown text
+                let breakdownHtml = '<strong>Tickets by On-Call Person:</strong> ';
+                const personBreakdown = Object.entries(breakdownByPerson)
+                    .map(([email, count]) => `${emailToName[email] || email} (${count})`)
+                    .join(', ');
+                breakdownHtml += personBreakdown || 'None';
+                
+                if (outsideCount > 0) {
+                    breakdownHtml += '<br><strong>Outside Coverage:</strong> ';
+                    const outsideBreakdown = [];
+                    if (outsideReasons.weekend > 0) outsideBreakdown.push(`${outsideReasons.weekend} weekend`);
+                    if (outsideReasons.afterHours > 0) outsideBreakdown.push(`${outsideReasons.afterHours} after-hours`);
+                    if (outsideReasons.beforeSchedule > 0) outsideBreakdown.push(`${outsideReasons.beforeSchedule} before schedule`);
+                    breakdownHtml += outsideBreakdown.join(', ');
+                }
+                
+                document.getElementById('overview-breakdown').innerHTML = breakdownHtml;
+                
+                // Calculate SLA metrics split by on-call hours vs after-hours
+                let onCallHoursTotal = 0, onCallHoursMet = 0, onCallHoursBreached = 0;
+                let afterHoursTotal = 0, afterHoursMet = 0, afterHoursBreached = 0;
+                let overallTotal = 0, overallMet = 0, overallBreached = 0;
+                
+                data.metrics.forEach(issue => {
+                    const whoWasOnCall = issue.whoWasOnCall;
+                    const isOffHours = whoWasOnCall && (
+                        whoWasOnCall === '[Weekend]' || 
+                        whoWasOnCall === '[After Hours]' || 
+                        whoWasOnCall === '[Before Oct 31]'
+                    );
+                    
+                    // Check SLA status based on manager response time
+                    if (issue.sla && issue.sla.length > 0 && issue.timeToFirstOnCallActionMinutes !== null) {
+                        const firstSla = issue.sla[0];
+                        const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
+                        
+                        if (goalMinutes !== null) {
+                            const breached = issue.timeToFirstOnCallActionMinutes > goalMinutes;
+                            
+                            // Overall stats
+                            overallTotal++;
+                            if (breached) {
+                                overallBreached++;
+                            } else {
+                                overallMet++;
+                            }
+                            
+                            // Split by on-call vs after-hours
+                            if (isOffHours) {
+                                afterHoursTotal++;
+                                if (breached) {
+                                    afterHoursBreached++;
+                                } else {
+                                    afterHoursMet++;
+                                }
+                            } else {
+                                onCallHoursTotal++;
+                                if (breached) {
+                                    onCallHoursBreached++;
+                                } else {
+                                    onCallHoursMet++;
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Update SLA metric cards
+                const onCallCompliance = onCallHoursTotal > 0 
+                    ? ((onCallHoursMet / onCallHoursTotal) * 100).toFixed(1)
+                    : '--';
+                const afterHoursCompliance = afterHoursTotal > 0
+                    ? ((afterHoursMet / afterHoursTotal) * 100).toFixed(1)
+                    : '--';
+                const overallCompliance = overallTotal > 0
+                    ? ((overallMet / overallTotal) * 100).toFixed(1)
+                    : '--';
+                
+                document.getElementById('oncall-sla').textContent = onCallCompliance !== '--' 
+                    ? `${onCallCompliance}% (${onCallHoursMet}/${onCallHoursTotal})`
+                    : '--';
+                document.getElementById('afterhours-sla').textContent = afterHoursCompliance !== '--'
+                    ? `${afterHoursCompliance}% (${afterHoursMet}/${afterHoursTotal})`
+                    : '--';
+                document.getElementById('overall-sla').textContent = overallCompliance !== '--'
+                    ? `${overallCompliance}% (${overallMet}/${overallTotal})`
+                    : '--';
+                
+                document.getElementById('timestamp').textContent = `Last Updated: ${new Date(data.generatedAt).toLocaleString()}`;
                 
                 console.log('Updated summary cards');
                 
@@ -558,10 +811,33 @@
                             total: 0,
                             active: 0,
                             completed: 0,
+                            breached: 0,
                             resolutionTimes: []
                         };
                     }
                     assigneeStats[assignee].total++;
+                    
+                    // Check if assignee breached SLA on their response time
+                    if (issue.sla && issue.sla.length > 0 && issue.firstAssignmentTime) {
+                        const goalMinutes = issue.sla[0].goalDuration ? issue.sla[0].goalDuration / (1000 * 60) : null;
+                        
+                        if (goalMinutes !== null) {
+                            if (issue.timeToFirstAssigneeCommentMinutes !== null) {
+                                // Has responded - check if it was within SLA
+                                if (issue.timeToFirstAssigneeCommentMinutes > goalMinutes) {
+                                    assigneeStats[assignee].breached++;
+                                }
+                            } else {
+                                // No response yet - check if overdue
+                                const assignmentDate = new Date(issue.firstAssignmentTime);
+                                const now = new Date();
+                                const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
+                                if (elapsedMinutes > goalMinutes) {
+                                    assigneeStats[assignee].breached++;
+                                }
+                            }
+                        }
+                    }
                     
                     const status = (issue.status || '').toLowerCase();
                     const isCompleted = doneStatuses.some(s => status.includes(s)) || issue.resolutionDate;
@@ -590,6 +866,7 @@
                                 <td>${stats.total}</td>
                                 <td><strong style="color: ${stats.active > 0 ? '#856404' : '#28a745'}">${stats.active}</strong></td>
                                 <td>${stats.completed}</td>
+                                <td><strong style="color: ${stats.breached > 0 ? '#d9534f' : '#28a745'}">${stats.breached}</strong></td>
                                 <td>${avgResolution}</td>
                             </tr>
                         `;
@@ -598,252 +875,182 @@
                 assigneeTbody.innerHTML = assigneeRows;
                 console.log('Updated assignee stats for', Object.keys(assigneeStats).length, 'assignees');
                 
-                // Calculate on-call manager response patterns with SLA breakdown
-                console.log('[DEBUG] Starting manager response calculation');
-                const managerResponsePatterns = {};
-                const managerList2 = ['Max', 'Grigoriy', 'Brad', 'Randy', 'Jeff', 'Akshay', 'Evgeniy'];
+                // Calculate on-call compliance metrics
+                console.log('[DEBUG] Starting on-call compliance calculation');
+                const onCallStats = {};
+                const ON_CALL_MANAGERS = ['Brad Goldberg', 'Jeff Maciorowski', 'Akshay Vijay Takkar', 'Grigoriy Semenenko', 'Randy Dahl', 'Evgeniy Suhov', 'Max Kuklin'];
                 
-                data.metrics.forEach(issue => {
-                    if (issue.assignedBy && issue.firstManagerActionTime) {
-                        const isManager = managerList2.some(mgr => issue.assignedBy.includes(mgr));
-                        if (isManager) {
-                            const manager = issue.assignedBy;
-                            
-                            // Determine SLA status based on MANAGER response time, not Jira's SLA
-                            let slaCategory = 'No SLA Data';
-                            if (issue.sla && issue.sla.length > 0 && issue.timeToFirstManagerActionMinutes !== null) {
-                                const firstSla = issue.sla[0];
-                                const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
-                                
-                                if (goalMinutes !== null) {
-                                    // Check if manager responded within the SLA goal
-                                    if (issue.timeToFirstManagerActionMinutes > goalMinutes) {
-                                        slaCategory = 'SLA Breached';
-                                    } else {
-                                        slaCategory = 'SLA Met';
-                                    }
-                                }
-                            }
-                            
-                            if (!managerResponsePatterns[manager]) {
-                                managerResponsePatterns[manager] = {
-                                    count: 0,
-                                    commentFirst: 0,
-                                    assignFirst: 0,
-                                    firstActionTimes: [],
-                                    bySLA: {}
-                                };
-                            }
-                            
-                            const pattern = managerResponsePatterns[manager];
-                            pattern.count++;
-                            
-                            if (issue.timeToFirstManagerActionMinutes !== null) {
-                                pattern.firstActionTimes.push(issue.timeToFirstManagerActionMinutes);
-                            }
-                            
-                            if (issue.firstManagerActionType === 'comment') {
-                                pattern.commentFirst++;
-                            } else if (issue.firstManagerActionType === 'assignment') {
-                                pattern.assignFirst++;
-                            }
-                            
-                            // Group by SLA
-                            if (!pattern.bySLA[slaCategory]) {
-                                pattern.bySLA[slaCategory] = {
-                                    count: 0,
-                                    times: [],
-                                    tickets: []
-                                };
-                            }
-                            
-                            const responseTime = issue.timeToFirstManagerActionMinutes !== null 
-                                ? issue.timeToFirstManagerActionMinutes / 60 
-                                : null;
-                            
-                            pattern.bySLA[slaCategory].count++;
-                            if (responseTime !== null) {
-                                pattern.bySLA[slaCategory].times.push(responseTime);
-                            }
-                            pattern.bySLA[slaCategory].tickets.push({
-                                key: issue.key,
-                                summary: issue.summary,
-                                responseTime: responseTime !== null ? responseTime.toFixed(1) : '--',
-                                actionType: issue.firstManagerActionType || 'unknown',
-                                url: `https://m3gr.atlassian.net/browse/${issue.key}`,
-                                created: issue.created,
-                                firstAction: issue.firstManagerActionTime,
-                                sla: issue.sla,
-                                openDurationMinutes: issue.openDurationMinutes,
-                                timeToResolutionMinutes: issue.timeToResolutionMinutes,
-                                status: issue.status,
-                                assignee: issue.assigneeCurrent || 'Unassigned',
-                                resolutionDate: issue.resolutionDate
-                            });
-                        }
-                    }
+                // Map email usernames to full names
+                const emailToNameMap = {
+                    'bgoldberg': 'Brad Goldberg',
+                    'jmaciorowski': 'Jeff Maciorowski',
+                    'atakkar': 'Akshay Vijay Takkar',
+                    'gsemenenko': 'Grigoriy Semenenko',
+                    'rdahl': 'Randy Dahl',
+                    'esuhov': 'Evgeniy Suhov',
+                    'mkulkin': 'Max Kuklin'
+                };
+                
+                // Initialize all on-call people
+                ON_CALL_MANAGERS.forEach(person => {
+                    onCallStats[person] = {
+                        ticketsDuringShift: 0,
+                        respondedTo: 0,
+                        someoneElseHandled: 0,
+                        noResponse: 0,
+                        responseTimes: [],
+                        breachedTickets: [],
+                        metTickets: [],
+                        slaMetCount: 0,
+                        slaBreachedCount: 0
+                    };
                 });
                 
-                // Ensure all 7 managers are in the list, even with 0 tickets
-                managerList2.forEach(mgr => {
-                    // Find if manager already exists (partial name match)
-                    const existingManager = Object.keys(managerResponsePatterns).find(key => key.includes(mgr));
-                    if (!existingManager) {
-                        // Add manager with 0 tickets
-                        managerResponsePatterns[mgr] = {
-                            count: 0,
-                            commentFirst: 0,
-                            assignFirst: 0,
-                            firstActionTimes: [],
-                            bySLA: {}
-                        };
+                data.metrics.forEach(issue => {
+                    const whoWasOnCallEmail = issue.whoWasOnCall;
+                    
+                    // Skip special labels like [Weekend], [After Hours], etc.
+                    if (!whoWasOnCallEmail || (whoWasOnCallEmail.startsWith('[') && whoWasOnCallEmail.endsWith(']'))) {
+                        return;
+                    }
+                    
+                    const whoWasOnCall = emailToNameMap[whoWasOnCallEmail] || whoWasOnCallEmail;
+                    const assignedBy = issue.assignedBy;
+                    
+                    // Track tickets created during each person's on-call shift
+                    if (whoWasOnCall && ON_CALL_MANAGERS.includes(whoWasOnCall)) {
+                        const stats = onCallStats[whoWasOnCall];
+                        stats.ticketsDuringShift++;
+                        
+                        // Check if SLA was breached or met
+                        if (issue.sla && issue.sla.length > 0 && issue.timeToFirstOnCallActionMinutes !== null) {
+                            const firstSla = issue.sla[0];
+                            const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
+                            if (goalMinutes !== null) {
+                                if (issue.timeToFirstOnCallActionMinutes > goalMinutes) {
+                                    stats.slaBreachedCount++;
+                                    stats.breachedTickets.push({
+                                        key: issue.key,
+                                        summary: issue.summary,
+                                        responseTime: (issue.timeToFirstOnCallActionMinutes / 60).toFixed(1),
+                                        goalTime: (goalMinutes / 60).toFixed(1),
+                                        created: issue.created,
+                                        firstActionTime: issue.firstOnCallActionTime,
+                                        actionType: issue.firstOnCallActionType
+                                    });
+                                } else {
+                                    stats.slaMetCount++;
+                                    stats.metTickets.push({
+                                        key: issue.key,
+                                        summary: issue.summary,
+                                        responseTime: (issue.timeToFirstOnCallActionMinutes / 60).toFixed(1),
+                                        goalTime: (goalMinutes / 60).toFixed(1)
+                                    });
+                                }
+                            }
+                        }
+                        
+                        if (!assignedBy) {
+                            stats.noResponse++;
+                        } else if (assignedBy === whoWasOnCall) {
+                            stats.respondedTo++;
+                            if (issue.timeToFirstOnCallActionMinutes !== null) {
+                                stats.responseTimes.push(issue.timeToFirstOnCallActionMinutes);
+                            }
+                        } else {
+                            stats.someoneElseHandled++;
+                        }
                     }
                 });
                 
                 const oncallTbody = document.getElementById('oncall-tbody');
-                let oncallRows = '';
-                const slaOrder = ['SLA Breached', 'SLA Met (On Time)', 'SLA Met', 'No SLA Data'];
+                let oncallRowsHtml = '';
                 
-                // Sort: active managers first (by count), then alphabetically by name for inactive
-                const sortedManagers = Object.entries(managerResponsePatterns).sort((a, b) => {
-                    if (b[1].count !== a[1].count) {
-                        return b[1].count - a[1].count; // Sort by count descending
-                    }
-                    return a[0].localeCompare(b[0]); // Then alphabetically
-                });
-                
-                sortedManagers.forEach(([manager, pattern], idx) => {
-                    const avgFirstAction = pattern.firstActionTimes.length > 0
-                        ? (pattern.firstActionTimes.reduce((a, b) => a + b, 0) / pattern.firstActionTimes.length / 60).toFixed(1)
-                        : '--';
-                    const commentFirstPct = pattern.count > 0
-                        ? ((pattern.commentFirst / pattern.count) * 100).toFixed(0)
-                        : '0';
-                    
-                    const allTimes = pattern.firstActionTimes.map(t => t / 60);
-                    const min = allTimes.length > 0 ? Math.min(...allTimes).toFixed(1) : '--';
-                    const max = allTimes.length > 0 ? Math.max(...allTimes).toFixed(1) : '--';
-                    
-                    const managerId = `oncall-${idx}`;
-                    const hasSLABreakdown = Object.keys(pattern.bySLA).length > 0;
-                    const commentStyle = pattern.commentFirst > pattern.assignFirst ? 'color: #28a745; font-weight: bold;' : '';
-                    
-                    // Main manager row
-                    const managerCaret = hasSLABreakdown ? `<span class="expand-icon" id="icon-${managerId}">▶</span>` : '';
-                    const managerClass = hasSLABreakdown ? 'expandable' : '';
-                    const managerClick = hasSLABreakdown ? `onclick="toggleManager('${managerId}')"` : '';
-                    
-                    oncallRows += `
-                        <tr class="${managerClass}" ${managerClick} style="background: #f8f9fa; font-weight: bold;">
-                            <td>${managerCaret}<strong>${manager}</strong></td>
-                            <td colspan="2" style="text-align: center;">${pattern.count} tickets</td>
-                            <td style="${commentStyle}">Avg: ${avgFirstAction}h</td>
-                            <td>💬 ${commentFirstPct}%</td>
-                            <td colspan="4">Range: ${min}h - ${max}h</td>
-                            <td colspan="2"></td>
-                        </tr>
-                    `;
-                    
-                    // SLA breakdown rows
-                    slaOrder.forEach(slaCategory => {
-                        if (pattern.bySLA[slaCategory]) {
-                            const slaStats = pattern.bySLA[slaCategory];
-                            const slaAvg = slaStats.times.length > 0
-                                ? (slaStats.times.reduce((a, b) => a + b, 0) / slaStats.times.length).toFixed(1)
-                                : '--';
-                            const slaMin = slaStats.times.length > 0 ? Math.min(...slaStats.times).toFixed(1) : '--';
-                            const slaMax = slaStats.times.length > 0 ? Math.max(...slaStats.times).toFixed(1) : '--';
-                            const slaCategoryId = `${managerId}-${slaCategory.replace(/\s+/g, '-')}`;
-                            const hasTickets = slaStats.tickets.length > 0;
-                            
-                            let slaIcon = '├─';
-                            let slaColor = '#666';
-                            if (slaCategory === 'SLA Breached') {
-                                slaIcon = '├─ ⚠️';
-                                slaColor = '#dc3545';
-                            } else if (slaCategory.includes('Met')) {
-                                slaIcon = '├─ ✓';
-                                slaColor = '#28a745';
-                            }
-                            
-                            const slaCaret = hasTickets ? `<span class="expand-icon" id="icon-${slaCategoryId}" style="font-size: 0.8em;">▶</span> ` : '';
-                            const slaClass = hasTickets ? 'priority-row expandable' : 'priority-row';
-                            const slaClick = hasTickets ? `onclick="toggleSLATickets('${slaCategoryId}')"` : '';
-                            
-                            // Calculate comment first % for this SLA category
-                            const commentFirstCount = slaStats.tickets.filter(t => t.actionType === 'comment').length;
-                            const slaCommentPct = slaStats.count > 0 ? ((commentFirstCount / slaStats.count) * 100).toFixed(0) : '0';
-                            const slaCommentStyle = commentFirstCount > (slaStats.count / 2) ? 'color: #28a745; font-weight: bold;' : '';
-                            
-                            oncallRows += `
-                                <tr class="${slaClass}" id="${managerId}-row" style="display:none; background: #fafbfc;" ${slaClick}>
-                                    <td style="padding-left: 30px;">${slaCaret}<span style="color: ${slaColor}">${slaIcon} ${slaCategory}</span></td>
-                                    <td>${slaStats.count} tickets</td>
-                                    <td></td>
-                                    <td colspan="2" style="text-align: center;">Avg: ${slaAvg}h</td>
-                                    <td style="${slaCommentStyle}">💬 ${slaCommentPct}%</td>
-                                    <td colspan="3">Range: ${slaMin}h - ${slaMax}h</td>
-                                    <td colspan="2"></td>
-                                </tr>
-                            `;
-                            
-                            // Individual ticket rows
-                            slaStats.tickets.forEach(ticket => {
-                                const actionBadge = ticket.actionType === 'comment' 
-                                    ? '<span style="color: #28a745; font-size: 0.85em;">💬 Comment</span>'
-                                    : '<span style="color: #667eea; font-size: 0.85em;">👤 Assign</span>';
+                Object.entries(onCallStats)
+                    .sort((a, b) => b[1].ticketsDuringShift - a[1].ticketsDuringShift)
+                    .forEach(([person, stats], idx) => {
+                        const totalWithSla = stats.slaMetCount + stats.slaBreachedCount;
+                        const complianceRate = totalWithSla > 0
+                            ? ((stats.slaMetCount / totalWithSla) * 100).toFixed(0)
+                            : '--';
+                        
+                        const avgResponseTime = stats.responseTimes.length > 0
+                            ? (stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length / 60).toFixed(1)
+                            : '--';
+                        
+                        const complianceColor = complianceRate !== '--' && complianceRate >= 80 ? '#28a745' : 
+                                               complianceRate !== '--' && complianceRate >= 50 ? '#856404' : 
+                                               complianceRate !== '--' ? '#dc3545' : '#999';
+                        
+                        const rowStyle = stats.ticketsDuringShift === 0 ? 'color: #999; font-style: italic;' : '';
+                        const hasBreaches = stats.breachedTickets.length > 0;
+                        const personId = `oncall-person-${idx}`;
+                        
+                        // Main row - clickable if has breaches
+                        const rowClass = hasBreaches ? 'expandable' : '';
+                        const rowClick = hasBreaches ? `onclick="toggleOnCallBreaches('${personId}')"` : '';
+                        const caret = hasBreaches ? `<span class="expand-icon" id="icon-${personId}">▶</span> ` : '';
+                        
+                        oncallRowsHtml += `
+                            <tr class="${rowClass}" ${rowClick} style="${rowStyle}">
+                                <td>${caret}<strong>${person}</strong>${hasBreaches ? ` <span style="color: #dc3545; font-size: 0.85em;">(${stats.breachedTickets.length} breached)</span>` : ''}</td>
+                                <td style="text-align: center;">${stats.ticketsDuringShift}</td>
+                                <td style="text-align: center; color: #28a745; font-weight: bold;">${stats.respondedTo}</td>
+                                <td style="text-align: center; color: #856404;">${stats.someoneElseHandled}</td>
+                                <td style="text-align: center; color: ${stats.noResponse > 0 ? '#dc3545' : '#666'};">${stats.noResponse}</td>
+                                <td style="text-align: center; color: ${complianceColor}; font-weight: bold;">${complianceRate !== '--' ? complianceRate + '%' : '--'}</td>
+                                <td style="text-align: center;">${avgResponseTime}${avgResponseTime !== '--' ? 'h' : ''}</td>
+                            </tr>
+                        `;
+                        
+                        // Breach detail rows
+                        if (hasBreaches) {
+                            stats.breachedTickets.forEach(ticket => {
+                                const createdDate = new Date(ticket.created);
+                                const actionDate = ticket.firstActionTime ? new Date(ticket.firstActionTime) : null;
+                                const createdStr = createdDate.toLocaleString('en-US', { 
+                                    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
+                                });
+                                const actionStr = actionDate ? actionDate.toLocaleString('en-US', { 
+                                    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true 
+                                }) : 'No response';
+                                const actionTypeStr = ticket.actionType === 'comment' ? 'commented' : 'assigned';
                                 
-                                // Format dates
-                                const createdDate = ticket.created ? new Date(ticket.created).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
-                                const firstActionDate = ticket.firstAction ? new Date(ticket.firstAction).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
-                                
-                                // SLA Status - recalculate based on manager response time
-                                let slaStatus = '--';
-                                if (ticket.sla && ticket.sla.length > 0) {
-                                    const firstSla = ticket.sla[0];
-                                    const goalHours = firstSla.goalDuration ? (firstSla.goalDuration / (1000 * 60 * 60)).toFixed(0) : '?';
-                                    
-                                    // Calculate if manager breached SLA based on their response time
-                                    const responseHours = parseFloat(ticket.responseTime);
-                                    const goalHoursNum = parseFloat(goalHours);
-                                    
-                                    if (!isNaN(responseHours) && !isNaN(goalHoursNum)) {
-                                        if (responseHours > goalHoursNum) {
-                                            slaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
-                                        } else {
-                                            slaStatus = `<span style="color: #28a745;">✓ Met (${goalHours}h)</span>`;
-                                        }
-                                    } else {
-                                        slaStatus = `<span style="color: #666;">Goal: ${goalHours}h</span>`;
-                                    }
-                                }
-                                
-                                const openDays = minutesToDays(ticket.openDurationMinutes);
-                                const resolutionDays = minutesToDays(ticket.timeToResolutionMinutes);
-                                const resolvedDate = ticket.resolutionDate ? new Date(ticket.resolutionDate).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
-                                
-                                oncallRows += `
-                                    <tr class="priority-row" id="${slaCategoryId}-ticket" style="display:none; background: #f0f1ff;">
-                                        <td style="padding-left: 60px;">└─ <a href="${ticket.url}" target="_blank" style="color: #667eea; text-decoration: none;">${ticket.key}</a></td>
-                                        <td style="font-size: 0.9em; color: #666;">${ticket.summary}</td>
-                                        <td style="font-size: 0.9em; color: #333; font-weight: 500;">${ticket.assignee}</td>
-                                        <td style="font-size: 0.85em; color: #666;">${createdDate}</td>
-                                        <td style="font-size: 0.85em; color: #667eea;">${firstActionDate}</td>
-                                        <td>${slaStatus}</td>
-                                        <td>${actionBadge}</td>
-                                        <td>${ticket.responseTime}h</td>
-                                        <td>${openDays}</td>
-                                        <td style="font-size: 0.85em; color: #666;">${resolvedDate}</td>
-                                        <td>${resolutionDays}</td>
+                                oncallRowsHtml += `
+                                    <tr class="breach-row" id="${personId}-breach" style="display:none; background: #fff3f3;">
+                                        <td style="padding-left: 40px;">
+                                            └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #dc3545; font-weight: bold; text-decoration: none;">${ticket.key}</a>
+                                        </td>
+                                        <td colspan="3" style="font-size: 0.9em; color: #666;">
+                                            ${ticket.summary}
+                                            <div style="font-size: 0.85em; color: #999; margin-top: 4px;">
+                                                📅 Created: ${createdStr} → ${actionDate ? actionTypeStr : 'no action'}: ${actionStr}
+                                            </div>
+                                        </td>
+                                        <td colspan="2" style="text-align: center; color: #dc3545;">⚠️ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)</td>
+                                        <td></td>
                                     </tr>
                                 `;
                             });
                         }
+                        
+                        // Met ticket rows (always visible)
+                        stats.metTickets.forEach(ticket => {
+                            oncallRowsHtml += `
+                                <tr style="background: #f0f9ff;">
+                                    <td style="padding-left: 40px;">
+                                        └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #28a745; font-weight: bold; text-decoration: none;">${ticket.key}</a>
+                                    </td>
+                                    <td colspan="3" style="font-size: 0.9em; color: #666;">${ticket.summary}</td>
+                                    <td colspan="2" style="text-align: center; color: #28a745;">✓ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)</td>
+                                    <td></td>
+                                </tr>
+                            `;
+                        });
                     });
-                });
                 
-                oncallTbody.innerHTML = oncallRows;
-                console.log('Updated manager response patterns for', sortedManagers.length, 'managers (including inactive)');
+                oncallTbody.innerHTML = oncallRowsHtml || '<tr><td colspan="7" style="text-align:center; color:#999;">No on-call data available</td></tr>';
+                console.log('Updated on-call stats for', Object.keys(onCallStats).length, 'people');
                 
             } catch (error) {
                 errorDiv.textContent = `Error: ${error.message}`;
