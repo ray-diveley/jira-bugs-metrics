@@ -116,6 +116,20 @@ export function calculateSLAKPIs(metricsData) {
   
   const complianceRate = totalTickets > 0 ? (metCount / totalTickets) * 100 : 0;
   
+  // Separate on-call and assignee metrics
+  const onCallResults = slaResults.filter(r => r.role === 'on-call');
+  const assigneeResults = slaResults.filter(r => r.role === 'assignee');
+  
+  const onCallMet = onCallResults.filter(r => r.met).length;
+  const onCallBreached = onCallResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
+  const onCallPending = onCallResults.filter(r => r.status === 'pending').length;
+  const onCallCompliance = onCallResults.length > 0 ? ((onCallMet / onCallResults.length) * 100).toFixed(1) : '0.0';
+  
+  const assigneeMet = assigneeResults.filter(r => r.met).length;
+  const assigneeBreached = assigneeResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
+  const assigneePending = assigneeResults.filter(r => r.status === 'pending').length;
+  const assigneeCompliance = assigneeResults.length > 0 ? ((assigneeMet / assigneeResults.length) * 100).toFixed(1) : '0.0';
+  
   // Manager-level performance
   const managerPerformance = {};
   slaResults.forEach(result => {
@@ -155,6 +169,22 @@ export function calculateSLAKPIs(metricsData) {
       pendingSLA: pendingCount,
       complianceRate: complianceRate.toFixed(1),
       avgResponseTime: calculateAvgResponseTime(slaResults.filter(r => r.status === 'responded'))
+    },
+    onCall: {
+      totalTickets: onCallResults.length,
+      metSLA: onCallMet,
+      breachedSLA: onCallBreached,
+      pendingSLA: onCallPending,
+      complianceRate: onCallCompliance,
+      avgResponseTime: calculateAvgResponseTime(onCallResults.filter(r => r.status === 'responded'))
+    },
+    assignee: {
+      totalTickets: assigneeResults.length,
+      metSLA: assigneeMet,
+      breachedSLA: assigneeBreached,
+      pendingSLA: assigneePending,
+      complianceRate: assigneeCompliance,
+      avgResponseTime: calculateAvgResponseTime(assigneeResults.filter(r => r.status === 'responded' || r.status === 'resolved'))
     },
     managerKPIs,
     timeAnalysis: {

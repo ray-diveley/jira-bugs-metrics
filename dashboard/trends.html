@@ -327,14 +327,16 @@
             <th>Period</th>
             <th>Collection Date</th>
             <th>Total Tickets</th>
-            <th>SLA Compliance</th>
+            <th>Overall SLA</th>
+            <th>On-Call SLA</th>
+            <th>Assignee SLA</th>
             <th>Met SLA</th>
             <th>Breached SLA</th>
             <th>Top Performer</th>
           </tr>
         </thead>
         <tbody id="snapshots-tbody">
-          <tr><td colspan="7" class="loading">Loading...</td></tr>
+          <tr><td colspan="9" class="loading">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -390,21 +392,52 @@
       const p1 = historyData.snapshots[idx1];
       const p2 = historyData.snapshots[idx2];
       
+      // Overall comparison
       const complianceChange = parseFloat(p1.kpis.overall.complianceRate) - parseFloat(p2.kpis.overall.complianceRate);
       const ticketChange = p1.kpis.overall.totalTickets - p2.kpis.overall.totalTickets;
       const ticketGrowth = p2.kpis.overall.totalTickets > 0 
         ? ((ticketChange / p2.kpis.overall.totalTickets) * 100).toFixed(1) 
         : 0;
       
+      // On-call comparison
+      const onCallChange = p1.kpis.onCall && p2.kpis.onCall 
+        ? parseFloat(p1.kpis.onCall.complianceRate) - parseFloat(p2.kpis.onCall.complianceRate)
+        : null;
+      
+      // Assignee comparison
+      const assigneeChange = p1.kpis.assignee && p2.kpis.assignee
+        ? parseFloat(p1.kpis.assignee.complianceRate) - parseFloat(p2.kpis.assignee.complianceRate)
+        : null;
+      
       const html = `
         <div class="trend-grid">
           <div class="trend-card ${complianceChange > 0 ? 'positive' : complianceChange < 0 ? 'negative' : ''}">
-            <div class="trend-label">SLA Compliance Change</div>
+            <div class="trend-label">Overall SLA Compliance Change</div>
             <div class="trend-value">${Math.abs(complianceChange).toFixed(1)}%</div>
             <div class="trend-change ${complianceChange > 0 ? 'up' : 'down'}">
               ${complianceChange > 0 ? '↑' : '↓'} ${complianceChange > 0 ? 'Improved' : 'Decreased'}
             </div>
           </div>
+          
+          ${onCallChange !== null ? `
+          <div class="trend-card ${onCallChange > 0 ? 'positive' : onCallChange < 0 ? 'negative' : ''}">
+            <div class="trend-label">On-Call SLA Compliance Change</div>
+            <div class="trend-value">${Math.abs(onCallChange).toFixed(1)}%</div>
+            <div class="trend-change ${onCallChange > 0 ? 'up' : 'down'}">
+              ${onCallChange > 0 ? '↑' : '↓'} ${onCallChange > 0 ? 'Improved' : 'Decreased'}
+            </div>
+          </div>
+          ` : ''}
+          
+          ${assigneeChange !== null ? `
+          <div class="trend-card ${assigneeChange > 0 ? 'positive' : assigneeChange < 0 ? 'negative' : ''}">
+            <div class="trend-label">Assignee SLA Compliance Change</div>
+            <div class="trend-value">${Math.abs(assigneeChange).toFixed(1)}%</div>
+            <div class="trend-change ${assigneeChange > 0 ? 'up' : 'down'}">
+              ${assigneeChange > 0 ? '↑' : '↓'} ${assigneeChange > 0 ? 'Improved' : 'Decreased'}
+            </div>
+          </div>
+          ` : ''}
           
           <div class="trend-card">
             <div class="trend-label">Period 1 (${p1.period.start} to ${p1.period.end})</div>
@@ -412,6 +445,7 @@
             <div style="color: #718096; font-size: 14px;">
               ${p1.kpis.overall.totalTickets} tickets, ${p1.kpis.overall.metSLA} met SLA
             </div>
+            ${p1.kpis.onCall ? `<div style="color: #667eea; font-size: 13px; margin-top: 5px;">On-Call: ${p1.kpis.onCall.complianceRate}% | Assignee: ${p1.kpis.assignee.complianceRate}%</div>` : ''}
           </div>
           
           <div class="trend-card">
@@ -420,6 +454,7 @@
             <div style="color: #718096; font-size: 14px;">
               ${p2.kpis.overall.totalTickets} tickets, ${p2.kpis.overall.metSLA} met SLA
             </div>
+            ${p2.kpis.onCall ? `<div style="color: #667eea; font-size: 13px; margin-top: 5px;">On-Call: ${p2.kpis.onCall.complianceRate}% | Assignee: ${p2.kpis.assignee.complianceRate}%</div>` : ''}
           </div>
           
           <div class="trend-card ${ticketChange > 0 ? 'positive' : ticketChange < 0 ? 'negative' : ''}">
@@ -520,6 +555,8 @@
           <td><span class="badge ${parseFloat(s.kpis.overall.complianceRate) >= 85 ? 'badge-success' : parseFloat(s.kpis.overall.complianceRate) >= 70 ? 'badge-warning' : 'badge-danger'}">
             ${s.kpis.overall.complianceRate}%
           </span></td>
+          <td>${s.kpis.onCall ? `<span class="badge ${parseFloat(s.kpis.onCall.complianceRate) >= 85 ? 'badge-success' : parseFloat(s.kpis.onCall.complianceRate) >= 70 ? 'badge-warning' : 'badge-danger'}">${s.kpis.onCall.complianceRate}%</span>` : 'N/A'}</td>
+          <td>${s.kpis.assignee ? `<span class="badge ${parseFloat(s.kpis.assignee.complianceRate) >= 85 ? 'badge-success' : parseFloat(s.kpis.assignee.complianceRate) >= 70 ? 'badge-warning' : 'badge-danger'}">${s.kpis.assignee.complianceRate}%</span>` : 'N/A'}</td>
           <td>${s.kpis.overall.metSLA}</td>
           <td>${s.kpis.overall.breachedSLA}</td>
           <td>${s.kpis.topPerformer || 'N/A'} ${s.kpis.topPerformerRate ? '(' + s.kpis.topPerformerRate + '%)' : ''}</td>
@@ -539,14 +576,26 @@
       // Clear canvas
       ctx.clearRect(0, 0, width, height);
       
-      // Prepare data
-      const data = historyData.snapshots.map(s => ({
+      // Prepare data - three separate lines
+      const overallData = historyData.snapshots.map(s => ({
         date: new Date(s.timestamp),
         compliance: parseFloat(s.kpis.overall.complianceRate),
         label: `${s.period.start.substring(5)} to ${s.period.end.substring(5)}`
       })).reverse();
       
-      if (data.length === 0) return;
+      const onCallData = historyData.snapshots.map(s => ({
+        date: new Date(s.timestamp),
+        compliance: s.kpis.onCall ? parseFloat(s.kpis.onCall.complianceRate) : null,
+        label: `${s.period.start.substring(5)} to ${s.period.end.substring(5)}`
+      })).reverse();
+      
+      const assigneeData = historyData.snapshots.map(s => ({
+        date: new Date(s.timestamp),
+        compliance: s.kpis.assignee ? parseFloat(s.kpis.assignee.complianceRate) : null,
+        label: `${s.period.start.substring(5)} to ${s.period.end.substring(5)}`
+      })).reverse();
+      
+      if (overallData.length === 0) return;
       
       const maxCompliance = 100;
       const minCompliance = 0;
@@ -578,40 +627,78 @@
         ctx.fillText(value.toFixed(0) + '%', 10, y + 5);
       }
       
-      // Draw line
-      ctx.strokeStyle = '#667eea';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
+      // Draw legend
+      ctx.font = 'bold 14px sans-serif';
+      const legendX = width - 250;
+      const legendY = 30;
       
-      data.forEach((point, i) => {
-        const x = padding + (width - 2 * padding) * (i / (data.length - 1 || 1));
-        const y = padding + (height - 2 * padding) * (1 - point.compliance / maxCompliance);
-        
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      });
+      ctx.fillStyle = '#667eea';
+      ctx.fillRect(legendX, legendY, 20, 3);
+      ctx.fillStyle = '#4a5568';
+      ctx.fillText('Overall SLA', legendX + 30, legendY + 5);
       
-      ctx.stroke();
+      ctx.fillStyle = '#48bb78';
+      ctx.fillRect(legendX, legendY + 25, 20, 3);
+      ctx.fillStyle = '#4a5568';
+      ctx.fillText('On-Call SLA', legendX + 30, legendY + 30);
       
-      // Draw points
-      data.forEach((point, i) => {
-        const x = padding + (width - 2 * padding) * (i / (data.length - 1 || 1));
-        const y = padding + (height - 2 * padding) * (1 - point.compliance / maxCompliance);
-        
-        // Point
-        ctx.fillStyle = '#667eea';
+      ctx.fillStyle = '#ed8936';
+      ctx.fillRect(legendX, legendY + 50, 20, 3);
+      ctx.fillStyle = '#4a5568';
+      ctx.fillText('Assignee SLA', legendX + 30, legendY + 55);
+      
+      // Helper function to draw a line
+      function drawLine(data, color, lineWidth = 3) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
         ctx.beginPath();
-        ctx.arc(x, y, 6, 0, 2 * Math.PI);
-        ctx.fill();
         
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 2;
+        let started = false;
+        data.forEach((point, i) => {
+          if (point.compliance === null) return;
+          
+          const x = padding + (width - 2 * padding) * (i / (data.length - 1 || 1));
+          const y = padding + (height - 2 * padding) * (1 - point.compliance / maxCompliance);
+          
+          if (!started) {
+            ctx.moveTo(x, y);
+            started = true;
+          } else {
+            ctx.lineTo(x, y);
+          }
+        });
+        
         ctx.stroke();
         
-        // Label
+        // Draw points
+        data.forEach((point, i) => {
+          if (point.compliance === null) return;
+          
+          const x = padding + (width - 2 * padding) * (i / (data.length - 1 || 1));
+          const y = padding + (height - 2 * padding) * (1 - point.compliance / maxCompliance);
+          
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(x, y, 5, 0, 2 * Math.PI);
+          ctx.fill();
+        });
+      }
+      
+      // Draw all three lines
+      drawLine(overallData, '#667eea');
+      
+      // Only draw on-call and assignee lines if data exists
+      if (onCallData.some(d => d.compliance !== null)) {
+        drawLine(onCallData, '#48bb78');
+      }
+      if (assigneeData.some(d => d.compliance !== null)) {
+        drawLine(assigneeData, '#ed8936');
+      }
+      
+      // Draw X-axis labels
+      overallData.forEach((point, i) => {
+        const x = padding + (width - 2 * padding) * (i / (overallData.length - 1 || 1));
+        
         ctx.fillStyle = '#4a5568';
         ctx.font = '11px sans-serif';
         ctx.save();
@@ -619,11 +706,6 @@
         ctx.rotate(-Math.PI / 4);
         ctx.fillText(point.label, 0, 0);
         ctx.restore();
-        
-        // Value
-        ctx.fillStyle = '#2d3748';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(point.compliance.toFixed(1) + '%', x - 15, y - 10);
       });
     }
     

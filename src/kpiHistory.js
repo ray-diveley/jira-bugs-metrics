@@ -43,6 +43,8 @@ export function saveKPISnapshot(kpis, period) {
     },
     kpis: {
       overall: kpis.overall,
+      onCall: kpis.onCall || null,
+      assignee: kpis.assignee || null,
       managerCount: kpis.managerKPIs.length,
       topPerformer: kpis.managerKPIs.length > 0 ? kpis.managerKPIs[0].manager : null,
       topPerformerRate: kpis.managerKPIs.length > 0 ? kpis.managerKPIs[0].complianceRate : null

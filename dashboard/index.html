@@ -13,7 +13,7 @@
             min-height: 100vh;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
         }
         h1 {
@@ -402,11 +402,11 @@
                         <th>Priority</th>
                         <th>Assignee</th>
                         <th>Created</th>
-                        <th>Assigned Date</th>
+                        <th>Assigned</th>
                         <th>First Response</th>
+                        <th>Closed</th>
                         <th title="Did the assignee respond within SLA after being assigned?">SLA Status</th>
                         <th>Open (days)</th>
-                        <th>Resolution (days)</th>
                     </tr>
                 </thead>
                 <tbody id="issues-tbody">
@@ -660,10 +660,11 @@
                             const assignmentDate = new Date(issue.firstAssignmentTime);
                             const resolutionDate = new Date(issue.resolutionDate);
                             const resolutionMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
+                            const resolutionHours = (resolutionMinutes / 60).toFixed(1);
                             if (resolutionMinutes > goalMinutes) {
-                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
+                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;" title="Resolved in ${resolutionHours}h (goal: ${goalHours}h)">⚠️ Breached (${resolutionHours}h)</span>`;
                             } else {
-                                assigneeSlaStatus = `<span style="color: #28a745;">✓ Met (resolved)</span>`;
+                                assigneeSlaStatus = `<span style="color: #28a745;" title="Resolved in ${resolutionHours}h">✓ Met (resolved)</span>`;
                             }
                         } else {
                             // No comment and not resolved - check if overdue
@@ -688,6 +689,9 @@
                 // Format first response (assignee comment)
                 const firstResponse = issue.firstAssigneeCommentTime ? new Date(issue.firstAssigneeCommentTime).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
                 
+                // Format closed/resolution date
+                const closedDate = issue.resolutionDate ? new Date(issue.resolutionDate).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+                
                 return `
                     <tr>
                         <td><a href="https://m3gr.atlassian.net/browse/${issue.key}" target="_blank" style="color: #667eea; font-weight: bold; text-decoration: none;">${issue.key}</a></td>
@@ -698,9 +702,9 @@
                         <td style="font-size: 0.85em; color: #666;">${createdDate}</td>
                         <td style="font-size: 0.85em; color: #667eea;">${assignedDate}</td>
                         <td style="font-size: 0.85em; color: #667eea; font-weight: 500;">${firstResponse}</td>
+                        <td style="font-size: 0.85em; color: #28a745;">${closedDate}</td>
                         <td>${assigneeSlaStatus}</td>
                         <td>${minutesToDays(issue.openDurationMinutes)}</td>
-                        <td>${minutesToDays(issue.timeToResolutionMinutes)}</td>
                     </tr>
                 `;
             }).join('');
