@@ -24,38 +24,53 @@ export function calculateSLAKPIs(metricsData) {
   // Track BOTH on-call manager response AND assignee response
   const slaResults = [];
   
+  // Email to name mapping for whoWasOnCall
+  const emailToName = {
+    'bgoldberg': 'Brad Goldberg',
+    'jmaciorowski': 'Jeff Maciorowski',
+    'atakkar': 'Akshay Vijay Takkar',
+    'gsemenenko': 'Grigoriy Semenenko',
+    'rdahl': 'Randy Dahl',
+    'esuhov': 'Evgeniy Suhov',
+    'mkulkin': 'Max Kuklin'
+  };
+  
   ticketsWithSLA.forEach(ticket => {
     const sla = ticket.sla[0]; // First SLA entry
     const goalHours = sla.goalDuration / (1000 * 60 * 60);
     const goalMinutes = goalHours * 60;
     
-    // Track the on-call manager (person who first responded/assigned)
-    if (ticket.assignedBy && ON_CALL_MANAGERS.includes(ticket.assignedBy)) {
-      const onCallResponseMinutes = ticket.timeToFirstOnCallActionMinutes;
-      
-      if (onCallResponseMinutes === null) {
-        const createdDate = new Date(ticket.created);
-        const now = new Date();
-        const elapsedMinutes = (now - createdDate) / (1000 * 60);
-        slaResults.push({
-          ticket: ticket.key,
-          manager: ticket.assignedBy,
-          role: 'on-call',
-          met: elapsedMinutes <= goalMinutes,
-          responseMinutes: null,
-          goalMinutes,
-          status: 'pending'
-        });
-      } else {
-        slaResults.push({
-          ticket: ticket.key,
-          manager: ticket.assignedBy,
-          role: 'on-call',
-          met: onCallResponseMinutes <= goalMinutes,
-          responseMinutes: onCallResponseMinutes,
-          goalMinutes,
-          status: 'responded'
-        });
+    // Track the on-call person (who was actually on-call when ticket was created)
+    const whoWasOnCall = ticket.whoWasOnCall;
+    if (whoWasOnCall && !whoWasOnCall.startsWith('[')) {
+      const onCallPerson = emailToName[whoWasOnCall] || whoWasOnCall;
+      if (ON_CALL_MANAGERS.includes(onCallPerson)) {
+        const onCallResponseMinutes = ticket.timeToFirstOnCallActionMinutes;
+        
+        if (onCallResponseMinutes === null) {
+          const createdDate = new Date(ticket.created);
+          const now = new Date();
+          const elapsedMinutes = (now - createdDate) / (1000 * 60);
+          slaResults.push({
+            ticket: ticket.key,
+            manager: onCallPerson,
+            role: 'on-call',
+            met: elapsedMinutes <= goalMinutes,
+            responseMinutes: null,
+            goalMinutes,
+            status: 'pending'
+          });
+        } else {
+          slaResults.push({
+            ticket: ticket.key,
+            manager: onCallPerson,
+            role: 'on-call',
+            met: onCallResponseMinutes <= goalMinutes,
+            responseMinutes: onCallResponseMinutes,
+            goalMinutes,
+            status: 'responded'
+          });
+        }
       }
     }
     

@@ -307,13 +307,13 @@
       <div class="loading">Loading KPIs...</div>
     </div>
     
-    <!-- Manager Performance -->
+    <!-- On-Call Performance -->
     <div class="section">
-      <h2 class="section-title">Manager SLA Performance</h2>
-      <table id="manager-table">
+      <h2 class="section-title">On-Call SLA Performance</h2>
+      <table id="oncall-table">
         <thead>
           <tr>
-            <th>Manager</th>
+            <th>On-Call Person</th>
             <th>Compliance Rate</th>
             <th>Met SLA</th>
             <th>Breached SLA</th>
@@ -323,7 +323,7 @@
             <th>Performance</th>
           </tr>
         </thead>
-        <tbody id="manager-tbody">
+        <tbody id="oncall-tbody">
           <tr><td colspan="8" class="loading">Loading...</td></tr>
         </tbody>
       </table>
@@ -375,7 +375,7 @@
         
         // Render all sections
         renderKPICards(currentKPIs);
-        renderManagerTable(currentKPIs);
+        renderOnCallTable(currentKPIs);
         renderResponseChart(currentKPIs);
         renderDayTable(currentKPIs);
       } catch (error) {
@@ -389,61 +389,84 @@
       const totalTickets = metrics.length;
       const ticketsWithSLA = metrics.filter(m => m.sla && m.sla.length > 0);
       
-      // Calculate SLA compliance
-      const slaResults = ticketsWithSLA.map(ticket => {
-        const sla = ticket.sla[0];
-        const goalHours = sla.goalDuration / (1000 * 60 * 60);
-        const responseMinutes = ticket.timeToFirstOnCallActionMinutes;
-        
-        if (responseMinutes === null) {
-          const createdDate = new Date(ticket.created);
-          const now = new Date();
-          const elapsedMinutes = (now - createdDate) / (1000 * 60);
+      const ON_CALL_PEOPLE = ['Brad Goldberg', 'Jeff Maciorowski', 'Akshay Vijay Takkar', 'Grigoriy Semenenko', 'Randy Dahl', 'Evgeniy Suhov', 'Max Kuklin'];
+      
+      // Helper to get display name from email
+      const emailToName = {
+        'bgoldberg': 'Brad Goldberg',
+        'jmaciorowski': 'Jeff Maciorowski',
+        'atakkar': 'Akshay Vijay Takkar',
+        'gsemenenko': 'Grigoriy Semenenko',
+        'rdahl': 'Randy Dahl',
+        'esuhov': 'Evgeniy Suhov',
+        'mkulkin': 'Max Kuklin'
+      };
+      
+      // Calculate SLA compliance - only for tickets where an on-call person was actually on-call
+      const slaResults = ticketsWithSLA
+        .filter(ticket => {
+          const whoWasOnCall = ticket.whoWasOnCall;
+          // Skip special labels and only include actual on-call people
+          if (!whoWasOnCall || whoWasOnCall.startsWith('[')) return false;
+          const onCallName = emailToName[whoWasOnCall] || whoWasOnCall;
+          return ON_CALL_PEOPLE.includes(onCallName);
+        })
+        .map(ticket => {
+          const sla = ticket.sla[0];
+          const goalHours = sla.goalDuration / (1000 * 60 * 60);
+          const responseMinutes = ticket.timeToFirstOnCallActionMinutes;
+          const whoWasOnCall = ticket.whoWasOnCall;
+          const onCallPerson = emailToName[whoWasOnCall] || whoWasOnCall;
+          
+          if (responseMinutes === null) {
+            const createdDate = new Date(ticket.created);
+            const now = new Date();
+            const elapsedMinutes = (now - createdDate) / (1000 * 60);
+            return {
+              ticket: ticket.key,
+              manager: onCallPerson,
+              met: elapsedMinutes <= (goalHours * 60),
+              responseMinutes: null,
+              goalMinutes: goalHours * 60,
+              status: 'pending'
+            };
+          }
+          
           return {
             ticket: ticket.key,
-            manager: ticket.assignedBy || 'Unassigned',
-            met: elapsedMinutes <= (goalHours * 60),
-            responseMinutes: null,
+            manager: onCallPerson,
+            met: responseMinutes <= (goalHours * 60),
+            responseMinutes,
             goalMinutes: goalHours * 60,
-            status: 'pending'
+            status: 'responded'
           };
-        }
-        
-        return {
-          ticket: ticket.key,
-          manager: ticket.assignedBy || 'Unknown',
-          met: responseMinutes <= (goalHours * 60),
-          responseMinutes,
-          goalMinutes: goalHours * 60,
-          status: 'responded'
-        };
-      });
+        });
       
       const metCount = slaResults.filter(r => r.met).length;
       const breachedCount = slaResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
       const pendingCount = slaResults.filter(r => r.status === 'pending').length;
       const complianceRate = totalTickets > 0 ? (metCount / totalTickets) * 100 : 0;
       
-      // Manager performance
-      const managerPerformance = {};
+      // On-Call performance
+      const onCallPerformance = {};
       slaResults.forEach(result => {
-        if (!managerPerformance[result.manager]) {
-          managerPerformance[result.manager] = { met: 0, breached: 0, pending: 0, total: 0, responseTimes: [] };
+        if (!onCallPerformance[result.manager]) {
+          onCallPerformance[result.manager] = { met: 0, breached: 0, pending: 0, total: 0, responseTimes: [] };
         }
-        managerPerformance[result.manager].total++;
+        onCallPerformance[result.manager].total++;
         if (result.status === 'pending') {
-          managerPerformance[result.manager].pending++;
+          onCallPerformance[result.manager].pending++;
         } else if (result.met) {
-          managerPerformance[result.manager].met++;
+          onCallPerformance[result.manager].met++;
         } else {
-          managerPerformance[result.manager].breached++;
+          onCallPerformance[result.manager].breached++;
         }
         if (result.responseMinutes !== null) {
-          managerPerformance[result.manager].responseTimes.push(result.responseMinutes);
+          onCallPerformance[result.manager].responseTimes.push(result.responseMinutes);
         }
       });
       
-      const managerKPIs = Object.entries(managerPerformance).map(([manager, stats]) => {
+      const onCallKPIs = Object.entries(onCallPerformance).map(([person, stats]) => {
         const avgResponseMinutes = stats.responseTimes.length > 0 
           ? stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length 
           : 0;
@@ -451,7 +474,7 @@
         const avgResponseMins = Math.floor(avgResponseMinutes % 60);
         
         return {
-          manager,
+          person,
           ...stats,
           complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
           avgResponseTime: stats.responseTimes.length > 0 ? `${avgResponseHours}h ${avgResponseMins}m` : 'N/A'
@@ -508,7 +531,7 @@
           complianceRate: complianceRate.toFixed(1),
           avgResponseTime: respondedTimes.length > 0 ? `${avgResponseHours}h ${avgResponseMins}m` : 'N/A'
         },
-        managerKPIs,
+        onCallKPIs,
         responseDistribution: distribution,
         dayKPIs
       };
@@ -575,15 +598,15 @@
       document.getElementById('kpi-cards').innerHTML = html;
     }
     
-    function renderManagerTable(kpis) {
-      const tbody = document.getElementById('manager-tbody');
+    function renderOnCallTable(kpis) {
+      const tbody = document.getElementById('oncall-tbody');
       
-      if (kpis.managerKPIs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No manager data available</td></tr>';
+      if (kpis.onCallKPIs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No on-call data available</td></tr>';
         return;
       }
       
-      const rows = kpis.managerKPIs.map(m => {
+      const rows = kpis.onCallKPIs.map(m => {
         const rate = parseFloat(m.complianceRate);
         let badgeClass = 'badge-success';
         if (rate < 70) badgeClass = 'badge-danger';
@@ -591,7 +614,7 @@
         
         return `
           <tr>
-            <td><strong>${m.manager}</strong></td>
+            <td><strong>${m.person}</strong></td>
             <td><span class="badge ${badgeClass}">${m.complianceRate}%</span></td>
             <td>${m.met}</td>
             <td>${m.breached}</td>
