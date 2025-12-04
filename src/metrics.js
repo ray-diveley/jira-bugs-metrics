@@ -1,4 +1,5 @@
 import { differenceInMinutes, parseISO } from 'date-fns';
+import { calculateBusinessMinutes, isOutsideBusinessHours, getCreatedTimeContext } from './businessHours.js';
 
 // Define on-call managers (must match kpi.js)
 const ON_CALL_MANAGERS = [
@@ -54,8 +55,18 @@ export function computeMetrics(issue) {
     }
     if (firstAssignmentTime) break;
   }
+  
+  // If no assignment in changelog but there's a current assignee, assume assigned at creation
+  if (!firstAssignmentTime && assignee) {
+    firstAssignmentTime = created;
+    assignedBy = 'Self-assigned'; // Assigned at ticket creation
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.log(`[debug] ${key}: No changelog assignment, using creation time as assignment for ${assignee}`);
+    }
+  }
 
   // Find first on-call action (assignment or comment from ANY on-call person)
+  // This includes the current assignee if they're an on-call manager
   let firstOnCallActionTime = null;
   let firstOnCallActionType = null;
   let onCallPersonWhoActedFirst = null;
@@ -78,7 +89,7 @@ export function computeMetrics(issue) {
     }
   }
   
-  // Check all comments for comments by on-call managers
+  // Check all comments for comments by on-call managers (including current assignee)
   for (const c of comments) {
     const authorName = c.author && c.author.displayName ? c.author.displayName : null;
     if (!authorName || !ON_CALL_MANAGERS.includes(authorName)) continue;
@@ -89,6 +100,11 @@ export function computeMetrics(issue) {
       firstOnCallActionType = 'comment';
       onCallPersonWhoActedFirst = authorName;
     }
+  }
+  
+  // If current assignee is an on-call manager and took first action, update assignedBy
+  if (onCallPersonWhoActedFirst && assignee === onCallPersonWhoActedFirst && !assignedBy) {
+    assignedBy = 'Self-assigned';
   }
 
   // Legacy: Find first manager comment (any comment from the person who assigned)
@@ -192,6 +208,15 @@ export function computeMetrics(issue) {
     }
   }
 
+  // Calculate business hours for key metrics
+  const businessHoursToFirstOnCallAction = firstOnCallActionTime 
+    ? calculateBusinessMinutes(created, firstOnCallActionTime)
+    : null;
+  
+  const businessHoursToFirstAssigneeComment = (firstAssignmentTime && firstAssigneeCommentTime)
+    ? calculateBusinessMinutes(firstAssignmentTime, firstAssigneeCommentTime)
+    : null;
+
   return {
     key,
     summary: fields.summary,
@@ -210,6 +235,10 @@ export function computeMetrics(issue) {
     timeToFirstOnCallActionMinutes,
     timeToAssignmentMinutes,
     timeToManagerCommentMinutes,
+    businessHoursToFirstOnCallAction,
+    businessHoursToFirstAssigneeComment,
+    createdOutsideBusinessHours: isOutsideBusinessHours(created),
+    createdTimeContext: getCreatedTimeContext(created),
     sla: slaData,
     openDurationMinutes,
     timeToResolutionMinutes,

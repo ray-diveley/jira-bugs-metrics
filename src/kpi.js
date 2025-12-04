@@ -2,6 +2,8 @@
  * KPI Calculator for SLA Performance Metrics
  */
 
+import { calculateBusinessMinutes, isOutsideBusinessHours, getCreatedTimeContext } from './businessHours.js';
+
 export function calculateSLAKPIs(metricsData) {
   const { metrics } = metricsData;
   
@@ -40,6 +42,10 @@ export function calculateSLAKPIs(metricsData) {
     const goalHours = sla.goalDuration / (1000 * 60 * 60);
     const goalMinutes = goalHours * 60;
     
+    // Check if ticket was created outside business hours
+    const createdOutsideHours = isOutsideBusinessHours(ticket.created);
+    const createdContext = getCreatedTimeContext(ticket.created);
+    
     // Track the on-call person (who was actually on-call when ticket was created)
     const whoWasOnCall = ticket.whoWasOnCall;
     if (whoWasOnCall && !whoWasOnCall.startsWith('[')) {
@@ -50,24 +56,34 @@ export function calculateSLAKPIs(metricsData) {
         if (onCallResponseMinutes === null) {
           const createdDate = new Date(ticket.created);
           const now = new Date();
-          const elapsedMinutes = (now - createdDate) / (1000 * 60);
+          const businessMinutes = calculateBusinessMinutes(createdDate, now);
           slaResults.push({
             ticket: ticket.key,
             manager: onCallPerson,
             role: 'on-call',
-            met: elapsedMinutes <= goalMinutes,
+            met: businessMinutes <= goalMinutes,
             responseMinutes: null,
+            businessMinutes,
+            actualMinutes: (now - createdDate) / (1000 * 60),
             goalMinutes,
+            createdOutsideHours,
+            createdContext,
             status: 'pending'
           });
         } else {
+          // Calculate business hours between creation and response
+          const businessMinutes = calculateBusinessMinutes(ticket.created, ticket.firstOnCallActionTime);
           slaResults.push({
             ticket: ticket.key,
             manager: onCallPerson,
             role: 'on-call',
-            met: onCallResponseMinutes <= goalMinutes,
+            met: businessMinutes <= goalMinutes,
             responseMinutes: onCallResponseMinutes,
+            businessMinutes,
+            actualMinutes: onCallResponseMinutes,
             goalMinutes,
+            createdOutsideHours,
+            createdContext,
             status: 'responded'
           });
         }
@@ -80,45 +96,64 @@ export function calculateSLAKPIs(metricsData) {
         ON_CALL_MANAGERS.includes(ticket.assigneeCurrent) &&
         ticket.firstAssignmentTime) {
       const assigneeResponseMinutes = ticket.timeToFirstAssigneeCommentMinutes;
+      const assignmentOutsideHours = isOutsideBusinessHours(ticket.firstAssignmentTime);
+      const assignmentContext = getCreatedTimeContext(ticket.firstAssignmentTime);
       
       if (assigneeResponseMinutes === null) {
         // No comment - check if resolved instead
         if (ticket.resolutionDate) {
           const assignmentDate = new Date(ticket.firstAssignmentTime);
           const resolutionDate = new Date(ticket.resolutionDate);
-          const resolutionMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
+          const businessMinutes = calculateBusinessMinutes(assignmentDate, resolutionDate);
+          const actualMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
           slaResults.push({
             ticket: ticket.key,
             manager: ticket.assigneeCurrent,
             role: 'assignee',
-            met: resolutionMinutes <= goalMinutes,
-            responseMinutes: resolutionMinutes,
+            met: businessMinutes <= goalMinutes,
+            responseMinutes: actualMinutes,
+            businessMinutes,
+            actualMinutes,
             goalMinutes,
+            createdOutsideHours: assignmentOutsideHours,
+            createdContext: assignmentContext,
             status: 'resolved'
           });
         } else {
           // Not resolved either - still pending
           const assignmentDate = new Date(ticket.firstAssignmentTime);
           const now = new Date();
-          const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
+          const businessMinutes = calculateBusinessMinutes(assignmentDate, now);
+          const actualMinutes = (now - assignmentDate) / (1000 * 60);
           slaResults.push({
             ticket: ticket.key,
             manager: ticket.assigneeCurrent,
             role: 'assignee',
-            met: elapsedMinutes <= goalMinutes,
+            met: businessMinutes <= goalMinutes,
             responseMinutes: null,
+            businessMinutes,
+            actualMinutes,
             goalMinutes,
+            createdOutsideHours: assignmentOutsideHours,
+            createdContext: assignmentContext,
             status: 'pending'
           });
         }
       } else {
+        const assignmentDate = new Date(ticket.firstAssignmentTime);
+        const responseDate = new Date(ticket.firstAssigneeCommentTime);
+        const businessMinutes = calculateBusinessMinutes(assignmentDate, responseDate);
         slaResults.push({
           ticket: ticket.key,
           manager: ticket.assigneeCurrent,
           role: 'assignee',
-          met: assigneeResponseMinutes <= goalMinutes,
+          met: businessMinutes <= goalMinutes,
           responseMinutes: assigneeResponseMinutes,
+          businessMinutes,
+          actualMinutes: assigneeResponseMinutes,
           goalMinutes,
+          createdOutsideHours: assignmentOutsideHours,
+          createdContext: assignmentContext,
           status: 'responded'
         });
       }

@@ -113,7 +113,7 @@ function ensureDataDir() {
 
 function writeSummaryCsv(metrics) {
   const headers = [
-    'key','summary','status','assigneeCurrent','assignedBy','whoWasOnCall','created','resolutionDate','firstAssignmentTime','firstAssigneeCommentTime','openDurationMinutes','timeToResolutionMinutes','timeToFirstAssigneeCommentMinutes'
+    'key','summary','status','assigneeCurrent','assignedBy','whoWasOnCall','created','createdTimeContext','resolutionDate','firstAssignmentTime','firstAssigneeCommentTime','openDurationMinutes','timeToResolutionMinutes','timeToFirstAssigneeCommentMinutes','businessHoursToFirstOnCallAction','businessHoursToFirstAssigneeComment'
   ];
   const rows = [headers.join(',')].concat(metrics.map(m => headers.map(h => escapeCsv(m[h])).join(',')));
   fs.writeFileSync(path.join('data','latest-summary.csv'), rows.join('\n'));
