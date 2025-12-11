@@ -15,14 +15,11 @@ const {
   LOG_LEVEL
 } = loadEnvConfig();
 
-// Service Desk ID from env
-const SERVICE_DESK_ID = process.env.JIRA_SERVICE_DESK_ID || '';
-
 function buildJql() {
   // If explicit JQL provided, use it as-is.
   if (JIRA_JQL && JIRA_JQL.trim().length) return JIRA_JQL.trim();
   const parts = [];
-  if (JIRA_PROJECT_KEY) parts.push(`project = ${JIRA_PROJECT_KEY}`);
+  if (JIRA_PROJECT_KEY) parts.push(`project = "${JIRA_PROJECT_KEY}"`);
   if (JIRA_ISSUE_TYPES) {
     const types = JIRA_ISSUE_TYPES.split(',').map(s => s.trim()).filter(Boolean);
     if (types.length === 1) parts.push(`issuetype = "${types[0]}"`);
@@ -35,103 +32,55 @@ function buildJql() {
   }
   if (JIRA_START_DATE) parts.push(`created >= '${JIRA_START_DATE}'`);
   if (JIRA_END_DATE) parts.push(`created <= '${JIRA_END_DATE}'`);
-  parts.push('ORDER BY created DESC');
-  return parts.join(' AND ');
+  const jql = parts.join(' AND ');
+  return jql + ' ORDER BY created DESC';
 }
 
 export async function fetchIssues({ maxIssues = Number(JIRA_MAX_ISSUES) || undefined }) {
   const auth = Buffer.from(`${JIRA_EMAIL}:${JIRA_API_TOKEN}`).toString('base64');
   const headers = { Authorization: `Basic ${auth}`, Accept: 'application/json' };
   const jql = buildJql();
+
   if (LOG_LEVEL === 'debug') {
     console.log('[debug] Final JQL:', jql);
   }
+
   const pageSize = 50;
-  let startAt = 0;
   let all = [];
-  let useChangelog = true;
+  let nextPageToken = '';
+
   while (true) {
     const remaining = maxIssues ? Math.max(0, maxIssues - all.length) : pageSize;
     const maxResults = remaining && remaining < pageSize ? remaining : pageSize;
-    const url = `${JIRA_BASE_URL}/rest/api/3/search`;
+    const url = `${JIRA_BASE_URL}/rest/api/3/search/jql`;
     const params = {
       jql,
-      startAt,
       maxResults,
-      ...(useChangelog ? { expand: 'changelog' } : {}),
-      fields: '*all'
+      expand: 'changelog',
+      fields: '*all',
+      ...(nextPageToken ? { nextPageToken } : {})
     };
-    let data;
-    try {
-      ({ data } = await axios.get(url, { headers, params }));
-    } catch (err) {
-      const status = err.response && err.response.status;
-      if (status === 410) {
-        console.warn('[warn] 410 on GET search; attempting POST body search fallback.');
-        const body = {
-          jql,
-          startAt,
-          maxResults,
-          fields: ['summary','status','assignee','created','resolutiondate'],
-          expand: useChangelog ? ['changelog'] : []
-        };
-        try {
-          const postResp = await axios.post(url, body, { headers });
-          data = postResp.data;
-        } catch (postErr) {
-          const postStatus = postErr.response && postErr.response.status;
-          if (postStatus === 410 && useChangelog) {
-            console.warn('[warn] 410 persists with POST + changelog; retrying POST without changelog.');
-            useChangelog = false;
-            continue;
-          }
-          if (postStatus === 410) {
-            console.warn('[error] 410 after all attempts; returning empty, fallback will be used.');
-            return all; // Return empty to trigger fallback
-          }
-          throw postErr;
-        }
-      } else if (status && status >= 400 && status < 500 && useChangelog) {
-        console.warn(`Warning: ${status} on request with changelog expansion; retrying without changelog.`);
-        useChangelog = false;
-        continue; // retry this same page without changelog
-      } else {
-        throw err;
-      }
+
+    const { data } = await axios.get(url, { headers, params });
+
+    if (LOG_LEVEL === 'debug') {
+      console.log(`[debug] Fetched ${data.issues.length} issues, nextPageToken: ${data.nextPageToken || 'none'}`);
     }
+
     all = all.concat(data.issues);
+
+    // Stop if no more issues
+    if (!data.issues || data.issues.length === 0) break;
+
+    // Stop if reached max limit
     if (maxIssues && all.length >= maxIssues) break;
-    if (startAt + maxResults >= data.total) break;
-    startAt += maxResults;
+
+    // Stop if no next page token (last page)
+    if (!data.nextPageToken) break;
+
+    nextPageToken = data.nextPageToken;
   }
-  if (all.length === 0) {
-    // Attempt Jira Service Management request search fallback (limited fields) if no issues and project key present.
-    if (JIRA_PROJECT_KEY) {
-      try {
-        const fallbackUrl = `${JIRA_BASE_URL}/rest/servicedeskapi/request`;
-        const params = { searchTerm: JIRA_PROJECT_KEY, requestStatus: 'ALL', limit: maxIssues || 50 };
-        const { data } = await axios.get(fallbackUrl, { headers });
-        if (data.values && Array.isArray(data.values)) {
-          if (LOG_LEVEL === 'debug') console.log('[debug] JSM fallback returned', data.values.length, 'requests');
-          // Map to issue-like objects minimal fields
-          return data.values.map(v => ({
-            key: v.issueKey || v.key || 'UNKN',
-            fields: {
-              summary: v.summary,
-              status: { name: v.currentStatus && v.currentStatus.status ? v.currentStatus.status : (v.currentStatus && v.currentStatus.name) },
-              assignee: v.requestParticipants && v.requestParticipants.length ? { displayName: v.requestParticipants[0].displayName } : null,
-              created: v.createdDate || v.created || new Date().toISOString(),
-              resolutiondate: null,
-              comment: { comments: [] }
-            },
-            changelog: { histories: [] }
-          }));
-        }
-      } catch (e) {
-        if (LOG_LEVEL === 'debug') console.log('[debug] JSM fallback failed:', e.message);
-      }
-    }
-  }
+
   return all;
 }
 
@@ -163,7 +112,7 @@ export async function fetchViaProject({ projectKey, maxIssues = 50 }) {
     for (const key of keys.slice(0, maxIssues)) {
       try {
         const issueUrl = `${JIRA_BASE_URL}/rest/api/3/issue/${key}`;
-        const issParams = { 
+        const issParams = {
           fields: '*all',
           expand: 'changelog'
         };
