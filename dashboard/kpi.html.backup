@@ -309,11 +309,11 @@
     
     <!-- On-Call Performance -->
     <div class="section">
-      <h2 class="section-title">📞 On-Call Manager Performance <span style="font-size: 14px; color: #718096;">(First response to new tickets - business hours)</span></h2>
+      <h2 class="section-title">On-Call SLA Performance</h2>
       <table id="oncall-table">
         <thead>
           <tr>
-            <th>Manager</th>
+            <th>On-Call Person</th>
             <th>Compliance Rate</th>
             <th>Met SLA</th>
             <th>Breached SLA</th>
@@ -324,50 +324,6 @@
           </tr>
         </thead>
         <tbody id="oncall-tbody">
-          <tr><td colspan="8" class="loading">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    
-    <!-- Developer Performance -->
-    <div class="section">
-      <h2 class="section-title">💻 Developer Performance <span style="font-size: 14px; color: #718096;">(Response after assignment - business hours)</span></h2>
-      <table id="developer-table">
-        <thead>
-          <tr>
-            <th>Developer</th>
-            <th>Compliance Rate</th>
-            <th>Met SLA</th>
-            <th>Breached SLA</th>
-            <th>Pending</th>
-            <th>Total Tickets</th>
-            <th>Avg Response Time</th>
-            <th>Performance</th>
-          </tr>
-        </thead>
-        <tbody id="developer-tbody">
-          <tr><td colspan="8" class="loading">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    
-    <!-- Combined Performance -->
-    <div class="section">
-      <h2 class="section-title">👥 Combined Performance <span style="font-size: 14px; color: #718096;">(Both on-call and developer roles)</span></h2>
-      <table id="combined-table">
-        <thead>
-          <tr>
-            <th>Person</th>
-            <th>Compliance Rate</th>
-            <th>Met SLA</th>
-            <th>Breached SLA</th>
-            <th>Pending</th>
-            <th>Total Tickets</th>
-            <th>Avg Response Time</th>
-            <th>Performance</th>
-          </tr>
-        </thead>
-        <tbody id="combined-tbody">
           <tr><td colspan="8" class="loading">Loading...</td></tr>
         </tbody>
       </table>
@@ -405,35 +361,180 @@
     
     async function loadKPIs() {
       try {
-        // Load latest metrics file which now includes pre-calculated KPIs
+        // Load latest metrics file
         const metricsResponse = await fetch('/api/latest-metrics');
         const metricsData = await metricsResponse.json();
         
-        // The backend now calculates KPIs - check if they exist
-        if (!metricsData.kpis) {
-          console.warn('No KPIs found in metrics data, metrics may need to be regenerated');
-          document.getElementById('kpi-cards').innerHTML = '<div class="no-data">KPIs not available. Please run metrics collection again.</div>';
-          return;
-        }
-        
-        currentKPIs = metricsData.kpis;
+        // Calculate KPIs
+        currentKPIs = calculateKPIs(metricsData);
         
         // Display period
-        const startDate = metricsData.period?.start || localStorage.getItem('startDate') || 'N/A';
-        const endDate = metricsData.period?.end || localStorage.getItem('endDate') || 'N/A';
+        const startDate = localStorage.getItem('startDate') || 'N/A';
+        const endDate = localStorage.getItem('endDate') || 'N/A';
         document.getElementById('period-display').textContent = `Period: ${startDate} to ${endDate}`;
         
         // Render all sections
         renderKPICards(currentKPIs);
         renderOnCallTable(currentKPIs);
-        renderDeveloperTable(currentKPIs);
-        renderCombinedTable(currentKPIs);
         renderResponseChart(currentKPIs);
         renderDayTable(currentKPIs);
       } catch (error) {
         console.error('Error loading KPIs:', error);
-        document.getElementById('kpi-cards').innerHTML = '<div class="no-data">Failed to load KPIs. Error: ' + error.message + '</div>';
+        document.getElementById('kpi-cards').innerHTML = '<div class="no-data">Failed to load KPIs</div>';
       }
+    }
+    
+    function calculateKPIs(metricsData) {
+      const metrics = metricsData.metrics || [];
+      const totalTickets = metrics.length;
+      const ticketsWithSLA = metrics.filter(m => m.sla && m.sla.length > 0);
+      
+      const ON_CALL_PEOPLE = ['Brad Goldberg', 'Jeff Maciorowski', 'Akshay Vijay Takkar', 'Grigoriy Semenenko', 'Randy Dahl', 'Evgeniy Suhov', 'Max Kuklin'];
+      
+      // Helper to get display name from email
+      const emailToName = {
+        'bgoldberg': 'Brad Goldberg',
+        'jmaciorowski': 'Jeff Maciorowski',
+        'atakkar': 'Akshay Vijay Takkar',
+        'gsemenenko': 'Grigoriy Semenenko',
+        'rdahl': 'Randy Dahl',
+        'esuhov': 'Evgeniy Suhov',
+        'mkulkin': 'Max Kuklin'
+      };
+      
+      // Calculate SLA compliance - only for tickets where an on-call person was actually on-call
+      const slaResults = ticketsWithSLA
+        .filter(ticket => {
+          const whoWasOnCall = ticket.whoWasOnCall;
+          // Skip special labels and only include actual on-call people
+          if (!whoWasOnCall || whoWasOnCall.startsWith('[')) return false;
+          const onCallName = emailToName[whoWasOnCall] || whoWasOnCall;
+          return ON_CALL_PEOPLE.includes(onCallName);
+        })
+        .map(ticket => {
+          const sla = ticket.sla[0];
+          const goalHours = sla.goalDuration / (1000 * 60 * 60);
+          const responseMinutes = ticket.timeToFirstOnCallActionMinutes;
+          const whoWasOnCall = ticket.whoWasOnCall;
+          const onCallPerson = emailToName[whoWasOnCall] || whoWasOnCall;
+          
+          if (responseMinutes === null) {
+            const createdDate = new Date(ticket.created);
+            const now = new Date();
+            const elapsedMinutes = (now - createdDate) / (1000 * 60);
+            return {
+              ticket: ticket.key,
+              manager: onCallPerson,
+              met: elapsedMinutes <= (goalHours * 60),
+              responseMinutes: null,
+              goalMinutes: goalHours * 60,
+              status: 'pending'
+            };
+          }
+          
+          return {
+            ticket: ticket.key,
+            manager: onCallPerson,
+            met: responseMinutes <= (goalHours * 60),
+            responseMinutes,
+            goalMinutes: goalHours * 60,
+            status: 'responded'
+          };
+        });
+      
+      const metCount = slaResults.filter(r => r.met).length;
+      const breachedCount = slaResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
+      const pendingCount = slaResults.filter(r => r.status === 'pending').length;
+      const complianceRate = totalTickets > 0 ? (metCount / totalTickets) * 100 : 0;
+      
+      // On-Call performance
+      const onCallPerformance = {};
+      slaResults.forEach(result => {
+        if (!onCallPerformance[result.manager]) {
+          onCallPerformance[result.manager] = { met: 0, breached: 0, pending: 0, total: 0, responseTimes: [] };
+        }
+        onCallPerformance[result.manager].total++;
+        if (result.status === 'pending') {
+          onCallPerformance[result.manager].pending++;
+        } else if (result.met) {
+          onCallPerformance[result.manager].met++;
+        } else {
+          onCallPerformance[result.manager].breached++;
+        }
+        if (result.responseMinutes !== null) {
+          onCallPerformance[result.manager].responseTimes.push(result.responseMinutes);
+        }
+      });
+      
+      const onCallKPIs = Object.entries(onCallPerformance).map(([person, stats]) => {
+        const avgResponseMinutes = stats.responseTimes.length > 0 
+          ? stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length 
+          : 0;
+        const avgResponseHours = Math.floor(avgResponseMinutes / 60);
+        const avgResponseMins = Math.floor(avgResponseMinutes % 60);
+        
+        return {
+          person,
+          ...stats,
+          complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
+          avgResponseTime: stats.responseTimes.length > 0 ? `${avgResponseHours}h ${avgResponseMins}m` : 'N/A'
+        };
+      }).sort((a, b) => parseFloat(b.complianceRate) - parseFloat(a.complianceRate));
+      
+      // Response time distribution
+      const distribution = {
+        'Under 1h': 0, '1-2h': 0, '2-4h': 0, '4-8h': 0, 'Over 8h': 0, 'No response': 0
+      };
+      slaResults.forEach(r => {
+        if (r.responseMinutes === null) distribution['No response']++;
+        else if (r.responseMinutes < 60) distribution['Under 1h']++;
+        else if (r.responseMinutes < 120) distribution['1-2h']++;
+        else if (r.responseMinutes < 240) distribution['2-4h']++;
+        else if (r.responseMinutes < 480) distribution['4-8h']++;
+        else distribution['Over 8h']++;
+      });
+      
+      // Day of week analysis
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const dayAnalysis = {};
+      metrics.forEach(m => {
+        const dayName = days[new Date(m.created).getDay()];
+        if (!dayAnalysis[dayName]) dayAnalysis[dayName] = { total: 0, met: 0, breached: 0 };
+        dayAnalysis[dayName].total++;
+        if (m.sla && m.sla.length > 0 && m.timeToFirstOnCallActionMinutes !== null) {
+          const goalMinutes = m.sla[0].goalDuration / (1000 * 60);
+          if (m.timeToFirstOnCallActionMinutes <= goalMinutes) dayAnalysis[dayName].met++;
+          else dayAnalysis[dayName].breached++;
+        }
+      });
+      
+      const dayKPIs = Object.entries(dayAnalysis).map(([day, stats]) => ({
+        day,
+        ...stats,
+        complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0
+      }));
+      
+      // Calculate avg response time for all responded tickets
+      const respondedTimes = slaResults.filter(r => r.responseMinutes !== null).map(r => r.responseMinutes);
+      const avgResponseMinutes = respondedTimes.length > 0 
+        ? respondedTimes.reduce((a, b) => a + b, 0) / respondedTimes.length 
+        : 0;
+      const avgResponseHours = Math.floor(avgResponseMinutes / 60);
+      const avgResponseMins = Math.floor(avgResponseMinutes % 60);
+      
+      return {
+        overall: {
+          totalTickets,
+          metSLA: metCount,
+          breachedSLA: breachedCount,
+          pendingSLA: pendingCount,
+          complianceRate: complianceRate.toFixed(1),
+          avgResponseTime: respondedTimes.length > 0 ? `${avgResponseHours}h ${avgResponseMins}m` : 'N/A'
+        },
+        onCallKPIs,
+        responseDistribution: distribution,
+        dayKPIs
+      };
     }
     
     function renderKPICards(kpis) {
@@ -451,7 +552,6 @@
           <div class="progress-bar-container">
             <div class="progress-bar" style="width: ${overall.complianceRate}%"></div>
           </div>
-          <div style="color: #718096; font-size: 12px; margin-top: 5px;">📅 Business hours only</div>
         </div>
         
         <div class="kpi-card">
@@ -482,7 +582,7 @@
           <div class="kpi-label">Avg Response Time</div>
           <div class="kpi-value">${overall.avgResponseTime}</div>
           <div style="color: #718096; font-size: 14px; margin-top: 10px;">
-            ⏱️ Business hours only
+            Time to first manager action
           </div>
         </div>
         
@@ -501,12 +601,12 @@
     function renderOnCallTable(kpis) {
       const tbody = document.getElementById('oncall-tbody');
       
-      if (!kpis.onCallManagerKPIs || kpis.onCallManagerKPIs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No on-call manager data available</td></tr>';
+      if (kpis.onCallKPIs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No on-call data available</td></tr>';
         return;
       }
       
-      const rows = kpis.onCallManagerKPIs.map(m => {
+      const rows = kpis.onCallKPIs.map(m => {
         const rate = parseFloat(m.complianceRate);
         let badgeClass = 'badge-success';
         if (rate < 70) badgeClass = 'badge-danger';
@@ -514,77 +614,7 @@
         
         return `
           <tr>
-            <td><strong>${m.manager}</strong></td>
-            <td><span class="badge ${badgeClass}">${m.complianceRate}%</span></td>
-            <td>${m.met}</td>
-            <td>${m.breached}</td>
-            <td>${m.pending}</td>
-            <td>${m.total}</td>
-            <td>${m.avgResponseTime}</td>
-            <td>
-              <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${m.complianceRate}%"></div>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-      
-      tbody.innerHTML = rows;
-    }
-    
-    function renderDeveloperTable(kpis) {
-      const tbody = document.getElementById('developer-tbody');
-      
-      if (!kpis.developerKPIs || kpis.developerKPIs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No developer data available</td></tr>';
-        return;
-      }
-      
-      const rows = kpis.developerKPIs.map(d => {
-        const rate = parseFloat(d.complianceRate);
-        let badgeClass = 'badge-success';
-        if (rate < 70) badgeClass = 'badge-danger';
-        else if (rate < 85) badgeClass = 'badge-warning';
-        
-        return `
-          <tr>
-            <td><strong>${d.developer}</strong></td>
-            <td><span class="badge ${badgeClass}">${d.complianceRate}%</span></td>
-            <td>${d.met}</td>
-            <td>${d.breached}</td>
-            <td>${d.pending}</td>
-            <td>${d.total}</td>
-            <td>${d.avgResponseTime}</td>
-            <td>
-              <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${d.complianceRate}%"></div>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-      
-      tbody.innerHTML = rows;
-    }
-    
-    function renderCombinedTable(kpis) {
-      const tbody = document.getElementById('combined-tbody');
-      
-      if (!kpis.managerKPIs || kpis.managerKPIs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No combined data available</td></tr>';
-        return;
-      }
-      
-      const rows = kpis.managerKPIs.map(m => {
-        const rate = parseFloat(m.complianceRate);
-        let badgeClass = 'badge-success';
-        if (rate < 70) badgeClass = 'badge-danger';
-        else if (rate < 85) badgeClass = 'badge-warning';
-        
-        return `
-          <tr>
-            <td><strong>${m.manager}</strong></td>
+            <td><strong>${m.person}</strong></td>
             <td><span class="badge ${badgeClass}">${m.complianceRate}%</span></td>
             <td>${m.met}</td>
             <td>${m.breached}</td>
@@ -604,11 +634,7 @@
     }
     
     function renderResponseChart(kpis) {
-      const dist = kpis.responseTimeDistribution;
-      if (!dist) {
-        document.getElementById('response-chart').innerHTML = '<div class="no-data">No response time data available</div>';
-        return;
-      }
+      const dist = kpis.responseDistribution;
       const maxValue = Math.max(...Object.values(dist));
       const chartContainer = document.getElementById('response-chart');
       
@@ -628,12 +654,12 @@
     function renderDayTable(kpis) {
       const tbody = document.getElementById('day-tbody');
       
-      if (!kpis.timeAnalysis || !kpis.timeAnalysis.byDayOfWeek || kpis.timeAnalysis.byDayOfWeek.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="no-data">No day of week data available</td></tr>';
+      if (kpis.dayKPIs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="no-data">No data available</td></tr>';
         return;
       }
       
-      const rows = kpis.timeAnalysis.byDayOfWeek.map(d => {
+      const rows = kpis.dayKPIs.map(d => {
         const rate = parseFloat(d.complianceRate);
         let badgeClass = 'badge-success';
         if (rate < 70) badgeClass = 'badge-danger';

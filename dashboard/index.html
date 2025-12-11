@@ -391,7 +391,7 @@
                 </select>
             </div>
             <p style="color: #666; font-size: 0.85em; margin-top: 10px; font-style: italic;">
-                💡 SLA Status shows whether the assignee responded (via comment) or resolved the ticket within 40h after being assigned.
+                💡 <strong>Response SLA:</strong> Did the assignee respond within 4 hours? | <strong>Time to Resolution:</strong> How long to fix? (🟢 <24h, 🟡 1-3d, 🟠 3-7d, 🔴 >7d)
             </p>
             <table>
                 <thead>
@@ -405,12 +405,13 @@
                         <th>Assigned</th>
                         <th>First Response</th>
                         <th>Closed</th>
-                        <th title="Did the assignee respond within SLA after being assigned?">SLA Status</th>
+                        <th title="Did the assignee respond within SLA after being assigned?">Response SLA</th>
+                        <th title="Time from assignment to resolution (informational - not SLA)">Time to Resolution</th>
                         <th>Open (days)</th>
                     </tr>
                 </thead>
                 <tbody id="issues-tbody">
-                    <tr><td colspan="11" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="12" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -560,19 +561,24 @@
                     const goalMinutes = firstSla.goalDuration ? (firstSla.goalDuration / (1000 * 60)) : null;
                     const goalHours = goalMinutes ? (goalMinutes / 60).toFixed(0) : '?';
                     
-                    // Recalculate SLA status based on ON-CALL response time
-                    if (goalMinutes !== null && issue.timeToFirstOnCallActionMinutes !== null) {
-                        if (issue.timeToFirstOnCallActionMinutes > goalMinutes) {
-                            slaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
+                    // Recalculate SLA status based on ON-CALL response time (using BUSINESS HOURS)
+                    if (goalMinutes !== null && issue.businessHoursToFirstOnCallAction !== null) {
+                        const businessHours = (issue.businessHoursToFirstOnCallAction / 60).toFixed(1);
+                        if (issue.businessHoursToFirstOnCallAction > goalMinutes) {
+                            slaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${businessHours}h)</span>`;
                         } else {
-                            slaStatus = `<span style="color: #28a745;">✓ Met (${goalHours}h)</span>`;
+                            slaStatus = `<span style="color: #28a745;">✓ Met (${businessHours}h)</span>`;
                         }
-                    } else if (issue.timeToFirstOnCallActionMinutes === null) {
-                        // No on-call action yet - check if overdue
+                    } else if (issue.businessHoursToFirstOnCallAction === null) {
+                        // No on-call action yet - check if overdue (using business hours)
                         const createdDate = new Date(issue.created);
                         const now = new Date();
+                        // For business hours calculation, we need to import the businessHours module
+                        // For now, use a simple check - if created outside hours, show pending without overdue
                         const elapsedMinutes = (now - createdDate) / (1000 * 60);
-                        if (elapsedMinutes > goalMinutes) {
+                        if (issue.createdOutsideBusinessHours) {
+                            slaStatus = `<span style="color: #856404;">⏳ Pending (created after hours)</span>`;
+                        } else if (elapsedMinutes > goalMinutes) {
                             slaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Pending (overdue)</span>`;
                         } else {
                             const hoursRemaining = ((goalMinutes - elapsedMinutes) / 60).toFixed(1);
@@ -640,31 +646,64 @@
                     onCallDisplay = `<span style="color: #dc3545; font-weight: bold;" title="Missed on-call response">${whoWasOnCall}</span>`;
                 }
                 
-                // Calculate Assignee SLA status
+                // Calculate Assignee Response SLA status (did they respond?)
                 let assigneeSlaStatus = '--';
+                let timeToResolution = '--';
+                
                 if (issue.sla && issue.sla.length > 0 && issue.firstAssignmentTime) {
                     const firstSla = issue.sla[0];
                     const goalMinutes = firstSla.goalDuration ? (firstSla.goalDuration / (1000 * 60)) : null;
                     const goalHours = goalMinutes ? (goalMinutes / 60).toFixed(0) : '?';
                     
+                    // Calculate time to resolution (informational, not SLA)
+                    if (issue.resolutionDate) {
+                        const assignmentDate = new Date(issue.firstAssignmentTime);
+                        const resolutionDate = new Date(issue.resolutionDate);
+                        const resolutionDays = ((resolutionDate - assignmentDate) / (1000 * 60 * 60 * 24)).toFixed(1);
+                        const resolutionHours = ((resolutionDate - assignmentDate) / (1000 * 60 * 60)).toFixed(1);
+                        
+                        // Color code based on resolution time
+                        let resolutionColor = '#28a745'; // green
+                        if (resolutionHours > 168) resolutionColor = '#dc3545'; // red (>7 days)
+                        else if (resolutionHours > 72) resolutionColor = '#fd7e14'; // orange (>3 days)
+                        else if (resolutionHours > 24) resolutionColor = '#ffc107'; // yellow (>1 day)
+                        
+                        timeToResolution = `<span style="color: ${resolutionColor}; font-weight: 500;">${resolutionDays}d (${resolutionHours}h)</span>`;
+                    } else {
+                        // Still open - show elapsed time since assignment
+                        const assignmentDate = new Date(issue.firstAssignmentTime);
+                        const now = new Date();
+                        const elapsedDays = ((now - assignmentDate) / (1000 * 60 * 60 * 24)).toFixed(1);
+                        const elapsedHours = ((now - assignmentDate) / (1000 * 60 * 60)).toFixed(1);
+                        
+                        // Color code based on elapsed time
+                        let elapsedColor = '#6c757d'; // gray
+                        if (elapsedHours > 168) elapsedColor = '#dc3545'; // red (>7 days)
+                        else if (elapsedHours > 72) elapsedColor = '#fd7e14'; // orange (>3 days)
+                        else if (elapsedHours > 24) elapsedColor = '#ffc107'; // yellow (>1 day)
+                        
+                        timeToResolution = `<span style="color: ${elapsedColor}; font-weight: 500;" title="Still open">${elapsedDays}d (${elapsedHours}h) ⏳</span>`;
+                    }
+                    
+                    // Check response SLA (did assignee comment?)
                     if (goalMinutes !== null) {
-                        if (issue.timeToFirstAssigneeCommentMinutes !== null) {
-                            // Assignee has commented - check if within SLA
-                            if (issue.timeToFirstAssigneeCommentMinutes > goalMinutes) {
-                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${goalHours}h)</span>`;
+                        if (issue.businessHoursToFirstAssigneeComment !== null) {
+                            // Assignee has commented - check if within SLA (using business hours)
+                            const businessHours = (issue.businessHoursToFirstAssigneeComment / 60).toFixed(1);
+                            if (issue.businessHoursToFirstAssigneeComment > goalMinutes) {
+                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${businessHours}h)</span>`;
                             } else {
-                                assigneeSlaStatus = `<span style="color: #28a745;">✓ Met (${goalHours}h)</span>`;
+                                assigneeSlaStatus = `<span style="color: #28a745;">✓ Responded (${businessHours}h)</span>`;
                             }
                         } else if (issue.resolutionDate) {
-                            // No comment but ticket is resolved - check if resolved within SLA
+                            // No comment but ticket is resolved - check if resolved quickly (implicit response)
                             const assignmentDate = new Date(issue.firstAssignmentTime);
                             const resolutionDate = new Date(issue.resolutionDate);
                             const resolutionMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
-                            const resolutionHours = (resolutionMinutes / 60).toFixed(1);
-                            if (resolutionMinutes > goalMinutes) {
-                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;" title="Resolved in ${resolutionHours}h (goal: ${goalHours}h)">⚠️ Breached (${resolutionHours}h)</span>`;
+                            if (resolutionMinutes <= goalMinutes) {
+                                assigneeSlaStatus = `<span style="color: #28a745;" title="Resolved quickly without comment">✓ Resolved fast</span>`;
                             } else {
-                                assigneeSlaStatus = `<span style="color: #28a745;" title="Resolved in ${resolutionHours}h">✓ Met (resolved)</span>`;
+                                assigneeSlaStatus = `<span style="color: #ffc107;" title="Resolved without commenting">⚠️ No response</span>`;
                             }
                         } else {
                             // No comment and not resolved - check if overdue
@@ -672,15 +711,16 @@
                             const now = new Date();
                             const elapsedMinutes = (now - assignmentDate) / (1000 * 60);
                             if (elapsedMinutes > goalMinutes) {
-                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Pending (overdue)</span>`;
+                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ No response (overdue)</span>`;
                             } else {
                                 const hoursRemaining = ((goalMinutes - elapsedMinutes) / 60).toFixed(1);
-                                assigneeSlaStatus = `<span style="color: #856404;">⏳ ${hoursRemaining}h left</span>`;
+                                assigneeSlaStatus = `<span style="color: #856404;">⏳ ${hoursRemaining}h to respond</span>`;
                             }
                         }
                     }
                 } else if (!issue.firstAssignmentTime) {
                     assigneeSlaStatus = '<span style="color: #999;">Not assigned</span>';
+                    timeToResolution = '<span style="color: #999;">--</span>';
                 }
                 
                 // Format assignment date
@@ -704,6 +744,7 @@
                         <td style="font-size: 0.85em; color: #667eea; font-weight: 500;">${firstResponse}</td>
                         <td style="font-size: 0.85em; color: #28a745;">${closedDate}</td>
                         <td>${assigneeSlaStatus}</td>
+                        <td>${timeToResolution}</td>
                         <td>${minutesToDays(issue.openDurationMinutes)}</td>
                     </tr>
                 `;
@@ -758,7 +799,9 @@
                 document.getElementById('total-count').textContent = data.summary.count || 0;
                 document.getElementById('avg-open').textContent = minutesToDays(data.summary.avgOpenDurationMinutes);
                 document.getElementById('avg-resolution').textContent = minutesToDays(data.summary.avgTimeToResolutionMinutes);
-                document.getElementById('avg-comment').textContent = minutesToDays(data.summary.avgTimeToFirstAssigneeCommentMinutes);
+                // Display business hours metric if available, fall back to actual minutes
+                const avgCommentMinutes = data.summary.avgBusinessHoursToFirstAssigneeComment || data.summary.avgTimeToFirstAssigneeCommentMinutes;
+                document.getElementById('avg-comment').textContent = minutesToDays(avgCommentMinutes);
                 document.getElementById('timestamp').textContent = `Last Updated: ${new Date(data.generatedAt).toLocaleString()}`;
                 
                 // Calculate ticket creation overview
@@ -831,13 +874,13 @@
                         whoWasOnCall === '[Before Oct 31]'
                     );
                     
-                    // Check SLA status based on on-call response time
-                    if (issue.sla && issue.sla.length > 0 && issue.timeToFirstOnCallActionMinutes !== null) {
+                    // Check SLA status based on on-call response time (using business hours)
+                    if (issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
                         const firstSla = issue.sla[0];
                         const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
                         
                         if (goalMinutes !== null) {
-                            const breached = issue.timeToFirstOnCallActionMinutes > goalMinutes;
+                            const breached = issue.businessHoursToFirstOnCallAction > goalMinutes;
                             
                             // Overall stats
                             overallTotal++;
@@ -928,9 +971,9 @@
                         const goalMinutes = issue.sla[0].goalDuration ? issue.sla[0].goalDuration / (1000 * 60) : null;
                         
                         if (goalMinutes !== null) {
-                            if (issue.timeToFirstAssigneeCommentMinutes !== null) {
-                                // Has commented - check if it was within SLA
-                                if (issue.timeToFirstAssigneeCommentMinutes > goalMinutes) {
+                            if (issue.businessHoursToFirstAssigneeComment !== null) {
+                                // Has commented - check if it was within SLA (using business hours)
+                                if (issue.businessHoursToFirstAssigneeComment > goalMinutes) {
                                     assigneeStats[assignee].breached++;
                                 }
                             } else if (issue.resolutionDate) {
@@ -1036,17 +1079,21 @@
                         const stats = onCallStats[whoWasOnCall];
                         stats.ticketsDuringShift++;
                         
-                        // Check if SLA was breached or met
-                        if (issue.sla && issue.sla.length > 0 && issue.timeToFirstOnCallActionMinutes !== null) {
+                        // Check if SLA was breached or met (using business hours)
+                        if (issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
                             const firstSla = issue.sla[0];
                             const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
                             if (goalMinutes !== null) {
-                                if (issue.timeToFirstOnCallActionMinutes > goalMinutes) {
+                                // Debug logging for ticket 15277
+                                if (issue.key === 'M3GRSC-15277') {
+                                    console.log('[DEBUG 15277]', 'Business hours:', issue.businessHoursToFirstOnCallAction, 'Goal:', goalMinutes, 'Breach?', issue.businessHoursToFirstOnCallAction > goalMinutes);
+                                }
+                                if (issue.businessHoursToFirstOnCallAction > goalMinutes) {
                                     stats.slaBreachedCount++;
                                     stats.breachedTickets.push({
                                         key: issue.key,
                                         summary: issue.summary,
-                                        responseTime: (issue.timeToFirstOnCallActionMinutes / 60).toFixed(1),
+                                        responseTime: (issue.businessHoursToFirstOnCallAction / 60).toFixed(1),
                                         goalTime: (goalMinutes / 60).toFixed(1),
                                         created: issue.created,
                                         firstActionTime: issue.firstOnCallActionTime,
@@ -1057,7 +1104,7 @@
                                     stats.metTickets.push({
                                         key: issue.key,
                                         summary: issue.summary,
-                                        responseTime: (issue.timeToFirstOnCallActionMinutes / 60).toFixed(1),
+                                        responseTime: (issue.businessHoursToFirstOnCallAction / 60).toFixed(1),
                                         goalTime: (goalMinutes / 60).toFixed(1)
                                     });
                                 }
@@ -1068,8 +1115,8 @@
                             stats.noResponse++;
                         } else if (assignedBy === whoWasOnCall) {
                             stats.respondedTo++;
-                            if (issue.timeToFirstOnCallActionMinutes !== null) {
-                                stats.responseTimes.push(issue.timeToFirstOnCallActionMinutes);
+                            if (issue.businessHoursToFirstOnCallAction !== null) {
+                                stats.responseTimes.push(issue.businessHoursToFirstOnCallAction);
                             }
                         } else {
                             stats.someoneElseHandled++;

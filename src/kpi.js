@@ -180,7 +180,7 @@ export function calculateSLAKPIs(metricsData) {
   const assigneePending = assigneeResults.filter(r => r.status === 'pending').length;
   const assigneeCompliance = assigneeResults.length > 0 ? ((assigneeMet / assigneeResults.length) * 100).toFixed(1) : '0.0';
   
-  // Manager-level performance
+  // Manager-level performance (COMBINED - both roles)
   const managerPerformance = {};
   slaResults.forEach(result => {
     if (!managerPerformance[result.manager]) {
@@ -196,12 +196,58 @@ export function calculateSLAKPIs(metricsData) {
     }
   });
   
-  // Calculate compliance rate for each manager
+  // Calculate compliance rate for each manager (combined)
   const managerKPIs = Object.entries(managerPerformance).map(([manager, stats]) => ({
     manager,
     ...stats,
     complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
     avgResponseTime: calculateAvgResponseTime(slaResults.filter(r => r.manager === manager))
+  })).sort((a, b) => b.complianceRate - a.complianceRate);
+  
+  // ON-CALL performance (first response to new tickets)
+  const onCallPerformance = {};
+  onCallResults.forEach(result => {
+    if (!onCallPerformance[result.manager]) {
+      onCallPerformance[result.manager] = { met: 0, breached: 0, pending: 0, total: 0 };
+    }
+    onCallPerformance[result.manager].total++;
+    if (result.status === 'pending') {
+      onCallPerformance[result.manager].pending++;
+    } else if (result.met) {
+      onCallPerformance[result.manager].met++;
+    } else {
+      onCallPerformance[result.manager].breached++;
+    }
+  });
+  
+  const onCallManagerKPIs = Object.entries(onCallPerformance).map(([manager, stats]) => ({
+    manager,
+    ...stats,
+    complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
+    avgResponseTime: calculateAvgResponseTime(onCallResults.filter(r => r.manager === manager && (r.status === 'responded' || r.status === 'resolved')))
+  })).sort((a, b) => b.complianceRate - a.complianceRate);
+  
+  // DEVELOPER performance (response after being assigned)
+  const developerPerformance = {};
+  assigneeResults.forEach(result => {
+    if (!developerPerformance[result.manager]) {
+      developerPerformance[result.manager] = { met: 0, breached: 0, pending: 0, total: 0 };
+    }
+    developerPerformance[result.manager].total++;
+    if (result.status === 'pending') {
+      developerPerformance[result.manager].pending++;
+    } else if (result.met) {
+      developerPerformance[result.manager].met++;
+    } else {
+      developerPerformance[result.manager].breached++;
+    }
+  });
+  
+  const developerKPIs = Object.entries(developerPerformance).map(([developer, stats]) => ({
+    developer,
+    ...stats,
+    complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
+    avgResponseTime: calculateAvgResponseTime(assigneeResults.filter(r => r.manager === developer && (r.status === 'responded' || r.status === 'resolved')))
   })).sort((a, b) => b.complianceRate - a.complianceRate);
   
   // Time-based analysis
@@ -237,6 +283,8 @@ export function calculateSLAKPIs(metricsData) {
       avgResponseTime: calculateAvgResponseTime(assigneeResults.filter(r => r.status === 'responded' || r.status === 'resolved'))
     },
     managerKPIs,
+    onCallManagerKPIs,
+    developerKPIs,
     timeAnalysis: {
       byDayOfWeek,
       byHourOfDay
@@ -247,9 +295,9 @@ export function calculateSLAKPIs(metricsData) {
 }
 
 function calculateAvgResponseTime(results) {
-  const responded = results.filter(r => r.responseMinutes !== null);
+  const responded = results.filter(r => r.businessMinutes !== null && r.businessMinutes !== undefined);
   if (responded.length === 0) return 'N/A';
-  const avg = responded.reduce((sum, r) => sum + r.responseMinutes, 0) / responded.length;
+  const avg = responded.reduce((sum, r) => sum + r.businessMinutes, 0) / responded.length;
   const hours = Math.floor(avg / 60);
   const minutes = Math.floor(avg % 60);
   return `${hours}h ${minutes}m`;
@@ -269,9 +317,9 @@ function analyzeByDayOfWeek(metrics) {
     
     analysis[dayName].total++;
     
-    if (m.sla && m.sla.length > 0 && m.timeToFirstOnCallActionMinutes !== null) {
+    if (m.sla && m.sla.length > 0 && m.businessHoursToFirstOnCallAction !== null && m.businessHoursToFirstOnCallAction !== undefined) {
       const goalMinutes = m.sla[0].goalDuration / (1000 * 60);
-      if (m.timeToFirstOnCallActionMinutes <= goalMinutes) {
+      if (m.businessHoursToFirstOnCallAction <= goalMinutes) {
         analysis[dayName].met++;
       } else {
         analysis[dayName].breached++;
@@ -299,9 +347,9 @@ function analyzeByHourOfDay(metrics) {
     
     analysis[hour].total++;
     
-    if (m.sla && m.sla.length > 0 && m.timeToFirstOnCallActionMinutes !== null) {
+    if (m.sla && m.sla.length > 0 && m.businessHoursToFirstOnCallAction !== null && m.businessHoursToFirstOnCallAction !== undefined) {
       const goalMinutes = (m.sla[0].goalDuration / (1000 * 60));
-      if (m.timeToFirstOnCallActionMinutes <= goalMinutes) {
+      if (m.businessHoursToFirstOnCallAction <= goalMinutes) {
         analysis[hour].met++;
       } else {
         analysis[hour].breached++;
@@ -327,15 +375,16 @@ function categorizeResponseTimes(results) {
   };
   
   results.forEach(r => {
-    if (r.responseMinutes === null) {
+    const minutes = r.businessMinutes !== null && r.businessMinutes !== undefined ? r.businessMinutes : r.responseMinutes;
+    if (minutes === null || minutes === undefined) {
       categories['No response']++;
-    } else if (r.responseMinutes < 60) {
+    } else if (minutes < 60) {
       categories['Under 1 hour']++;
-    } else if (r.responseMinutes < 120) {
+    } else if (minutes < 120) {
       categories['1-2 hours']++;
-    } else if (r.responseMinutes < 240) {
+    } else if (minutes < 240) {
       categories['2-4 hours']++;
-    } else if (r.responseMinutes < 480) {
+    } else if (minutes < 480) {
       categories['4-8 hours']++;
     } else {
       categories['Over 8 hours']++;
@@ -400,4 +449,141 @@ export function saveKPISnapshot(kpis, filepath) {
   };
   
   return snapshot;
+}
+
+/**
+ * Get individual performance trends over time
+ * @param {Array} history - Array of KPI snapshots from kpi-history.json
+ * @param {string} personName - Name of person to analyze
+ * @returns {Object} Performance trends by role
+ */
+export function getPersonalTrends(history, personName) {
+  const trends = {
+    person: personName,
+    onCallTrends: [],
+    developerTrends: [],
+    combinedTrends: []
+  };
+  
+  history.forEach(snapshot => {
+    const date = snapshot.timestamp;
+    const period = `${snapshot.period.start} to ${snapshot.period.end}`;
+    
+    // On-call performance
+    const onCallPerf = snapshot.kpis.onCallManagerKPIs?.find(k => k.manager === personName);
+    if (onCallPerf) {
+      trends.onCallTrends.push({
+        date,
+        period,
+        complianceRate: parseFloat(onCallPerf.complianceRate),
+        total: onCallPerf.total,
+        met: onCallPerf.met,
+        breached: onCallPerf.breached,
+        avgResponseTime: onCallPerf.avgResponseTime
+      });
+    }
+    
+    // Developer performance
+    const devPerf = snapshot.kpis.developerKPIs?.find(k => k.developer === personName);
+    if (devPerf) {
+      trends.developerTrends.push({
+        date,
+        period,
+        complianceRate: parseFloat(devPerf.complianceRate),
+        total: devPerf.total,
+        met: devPerf.met,
+        breached: devPerf.breached,
+        avgResponseTime: devPerf.avgResponseTime
+      });
+    }
+    
+    // Combined performance
+    const combinedPerf = snapshot.kpis.managerKPIs?.find(k => k.manager === personName);
+    if (combinedPerf) {
+      trends.combinedTrends.push({
+        date,
+        period,
+        complianceRate: parseFloat(combinedPerf.complianceRate),
+        total: combinedPerf.total,
+        met: combinedPerf.met,
+        breached: combinedPerf.breached,
+        avgResponseTime: combinedPerf.avgResponseTime
+      });
+    }
+  });
+  
+  return trends;
+}
+
+/**
+ * Compare performance between two periods for all people
+ * @param {Object} currentKPIs - Current period KPIs
+ * @param {Object} previousKPIs - Previous period KPIs
+ * @returns {Object} Detailed comparison by role
+ */
+export function comparePerformanceByRole(currentKPIs, previousKPIs) {
+  const comparison = {
+    onCallComparison: [],
+    developerComparison: [],
+    combinedComparison: []
+  };
+  
+  // On-call manager comparison
+  if (currentKPIs.onCallManagerKPIs && previousKPIs.onCallManagerKPIs) {
+    currentKPIs.onCallManagerKPIs.forEach(curr => {
+      const prev = previousKPIs.onCallManagerKPIs.find(p => p.manager === curr.manager);
+      if (prev) {
+        const complianceChange = parseFloat(curr.complianceRate) - parseFloat(prev.complianceRate);
+        comparison.onCallComparison.push({
+          manager: curr.manager,
+          currentRate: curr.complianceRate,
+          previousRate: prev.complianceRate,
+          change: complianceChange.toFixed(1),
+          improved: complianceChange >= 0,
+          currentTotal: curr.total,
+          previousTotal: prev.total
+        });
+      }
+    });
+  }
+  
+  // Developer comparison
+  if (currentKPIs.developerKPIs && previousKPIs.developerKPIs) {
+    currentKPIs.developerKPIs.forEach(curr => {
+      const prev = previousKPIs.developerKPIs.find(p => p.developer === curr.developer);
+      if (prev) {
+        const complianceChange = parseFloat(curr.complianceRate) - parseFloat(prev.complianceRate);
+        comparison.developerComparison.push({
+          developer: curr.developer,
+          currentRate: curr.complianceRate,
+          previousRate: prev.complianceRate,
+          change: complianceChange.toFixed(1),
+          improved: complianceChange >= 0,
+          currentTotal: curr.total,
+          previousTotal: prev.total
+        });
+      }
+    });
+  }
+  
+  // Combined comparison
+  if (currentKPIs.managerKPIs && previousKPIs.managerKPIs) {
+    currentKPIs.managerKPIs.forEach(curr => {
+      const prev = previousKPIs.managerKPIs.find(p => p.manager === curr.manager);
+      if (prev) {
+        const complianceChange = parseFloat(curr.complianceRate) - parseFloat(prev.complianceRate);
+        comparison.combinedComparison.push({
+          person: curr.manager,
+          currentRate: curr.complianceRate,
+          previousRate: prev.complianceRate,
+          change: complianceChange.toFixed(1),
+          improved: complianceChange >= 0,
+          currentTotal: curr.total,
+          previousTotal: prev.total
+        });
+      }
+    });
+  }
+  
+  return comparison;
 }

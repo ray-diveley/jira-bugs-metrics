@@ -22,11 +22,11 @@ This is a **Jira SLA metrics tracker** with dashboard visualizations for enginee
                     server.js (port 3000) → dashboard/*.html (charts & tables)
 ```
 
-**Critical detail**: The system tracks TWO response pathways:
-1. **On-call manager** response (via `whoWasOnCall` from Opsgenie + `timeToFirstOnCallActionMinutes`)
-2. **Assignee** response (via `timeToFirstAssigneeCommentMinutes` after assignment)
+**Critical detail**: The system tracks TWO response pathways using **business hours only** (Mon-Fri 8 AM-5 PM EST):
+1. **On-call manager** response (via `whoWasOnCall` from Opsgenie + `businessHoursToFirstOnCallAction`)
+2. **Assignee** response (via `businessHoursToFirstAssigneeComment` after assignment)
 
-Both are independently measured for SLA compliance. See `src/kpi.js:73-141` for the dual-tracking logic.
+Both are independently measured for SLA compliance using business hours calculations. See `src/kpi.js:73-141` for the dual-tracking logic and `src/businessHours.js` for business hours calculations.
 
 ## Key Conventions & Patterns
 

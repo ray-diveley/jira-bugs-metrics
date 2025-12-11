@@ -258,6 +258,8 @@ export function summarize(allMetrics) {
     count: allMetrics.length,
     avgOpenDurationMinutes: avg(numeric('openDurationMinutes')),
     avgTimeToResolutionMinutes: avg(numeric('timeToResolutionMinutes')),
-    avgTimeToFirstAssigneeCommentMinutes: avg(numeric('timeToFirstAssigneeCommentMinutes'))
+    avgTimeToFirstAssigneeCommentMinutes: avg(numeric('timeToFirstAssigneeCommentMinutes')),
+    avgBusinessHoursToFirstOnCallAction: avg(numeric('businessHoursToFirstOnCallAction')),
+    avgBusinessHoursToFirstAssigneeComment: avg(numeric('businessHoursToFirstAssigneeComment'))
   };
 }

@@ -84,17 +84,22 @@ async function main() {
   }
   
   const summary = summarize(metrics);
-  const out = { generatedAt: new Date().toISOString(), summary, metrics };
-  const jsonPath = path.join('data', `metrics-${timestamp}.json`);
-  fs.writeFileSync(jsonPath, JSON.stringify(out, null, 2));
-  writeSummaryCsv(metrics);
   
-  // Calculate and save KPI snapshot
-  const kpis = calculateSLAKPIs(out);
+  // Calculate KPIs before saving
+  const tempOut = { generatedAt: new Date().toISOString(), summary, metrics };
+  const kpis = calculateSLAKPIs(tempOut);
   const period = {
     start: cfg.JIRA_START_DATE || 'N/A',
     end: cfg.JIRA_END_DATE || 'N/A'
   };
+  
+  // Include KPIs and period in the output JSON
+  const out = { generatedAt: new Date().toISOString(), period, summary, metrics, kpis };
+  const jsonPath = path.join('data', `metrics-${timestamp}.json`);
+  fs.writeFileSync(jsonPath, JSON.stringify(out, null, 2));
+  writeSummaryCsv(metrics);
+  
+  // Save KPI snapshot for historical tracking
   saveKPISnapshot(kpis, period);
   
   console.log('Summary:', summary);
