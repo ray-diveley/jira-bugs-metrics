@@ -785,14 +785,13 @@
 
                 console.log('Loaded data:', data);
 
-                // Extract and display date range from config
-                const saved = JSON.parse(localStorage.getItem('jiraConfig') || '{}');
-                const dateRangeText = saved.startDate && saved.endDate
-                    ? `(${saved.startDate} to ${saved.endDate})`
+                // Extract and display date range from the data itself (not localStorage)
+                const dateRangeText = data.period && data.period.start && data.period.end
+                    ? `(${data.period.start} to ${data.period.end})`
                     : '';
                 document.getElementById('date-range').textContent = dateRangeText;
-                document.getElementById('oncall-date-range').textContent = saved.startDate && saved.endDate
-                    ? `Date Range: ${saved.startDate} to ${saved.endDate}`
+                document.getElementById('oncall-date-range').textContent = data.period && data.period.start && data.period.end
+                    ? `Date Range: ${data.period.start} to ${data.period.end}`
                     : 'Date Range: Not configured';
 
                 // Update summary metrics
@@ -1078,14 +1077,7 @@
                     if (whoWasOnCallEmail && whoWasOnCallEmail.startsWith('[') && whoWasOnCallEmail.endsWith(']')) {
                         if (outsideShiftsStats[whoWasOnCallEmail]) {
                             outsideShiftsStats[whoWasOnCallEmail].count++;
-                            outsideShiftsStats[whoWasOnCallEmail].tickets.push({
-                                key: issue.key,
-                                summary: issue.summary,
-                                created: issue.created,
-                                priority: issue.priority,
-                                status: issue.status
-                            });
-
+                            
                             // Calculate compliance and response time (use better of on-call or assignee response)
                             const onCallResponse = issue.businessHoursToFirstOnCallAction;
                             const assigneeResponse = issue.businessHoursToFirstAssigneeComment;
@@ -1099,21 +1091,33 @@
                                 bestResponse = assigneeResponse;
                             }
 
-                            if (bestResponse !== null) {
+                            let slaMet = null;
+                            let goalMinutes = null;
+                            
+                            if (bestResponse !== null && issue.sla && issue.sla.length > 0) {
+                                const firstSla = issue.sla[0];
+                                goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : 240;
+                                slaMet = bestResponse <= goalMinutes;
+                                
                                 outsideShiftsStats[whoWasOnCallEmail].responseTimes.push(bestResponse);
-
-                                // Check SLA compliance (4-hour goal = 240 minutes)
-                                if (issue.sla && issue.sla.length > 0) {
-                                    const firstSla = issue.sla[0];
-                                    const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : 240;
-
-                                    if (bestResponse <= goalMinutes) {
-                                        outsideShiftsStats[whoWasOnCallEmail].slaMetCount++;
-                                    } else {
-                                        outsideShiftsStats[whoWasOnCallEmail].slaBreachedCount++;
-                                    }
+                                
+                                if (slaMet) {
+                                    outsideShiftsStats[whoWasOnCallEmail].slaMetCount++;
+                                } else {
+                                    outsideShiftsStats[whoWasOnCallEmail].slaBreachedCount++;
                                 }
                             }
+                            
+                            outsideShiftsStats[whoWasOnCallEmail].tickets.push({
+                                key: issue.key,
+                                summary: issue.summary,
+                                created: issue.created,
+                                priority: issue.priority,
+                                status: issue.status,
+                                responseTime: bestResponse !== null ? (bestResponse / 60).toFixed(1) : null,
+                                goalTime: goalMinutes !== null ? (goalMinutes / 60).toFixed(1) : null,
+                                slaMet: slaMet
+                            });
                         }
                         return;
                     }
@@ -1159,6 +1163,7 @@
                             }
                         }
 
+                        // Compare using full display names (both should be display names now)
                         if (!assignedBy) {
                             stats.noResponse++;
                         } else if (assignedBy === whoWasOnCall) {
@@ -1323,18 +1328,42 @@
                                 const priorityColor = ticket.priority === 'Highest' || ticket.priority === 'High' ? '#dc3545' :
                                                     ticket.priority === 'Medium' ? '#856404' : '#666';
 
+                                // Determine row styling based on SLA compliance
+                                let rowBgColor = '#f8f9fa';
+                                let linkColor = '#667eea';
+                                let responseDisplay = '';
+                                let responseColor = '#666';
+                                
+                                if (ticket.slaMet !== null && ticket.responseTime !== null && ticket.goalTime !== null) {
+                                    if (ticket.slaMet) {
+                                        rowBgColor = '#f0f9ff';
+                                        linkColor = '#28a745';
+                                        responseDisplay = `✓ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)`;
+                                        responseColor = '#28a745';
+                                    } else {
+                                        rowBgColor = '#fff5f5';
+                                        linkColor = '#dc3545';
+                                        responseDisplay = `⚠️ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)`;
+                                        responseColor = '#dc3545';
+                                    }
+                                } else if (ticket.responseTime === null) {
+                                    responseDisplay = 'No response yet';
+                                    responseColor = '#999';
+                                }
+
                                 outsideShiftsHtml += `
-                                    <tr class="oncall-detail-row" id="${categoryId}-detail" style="display:none; background: #f8f9fa;">
+                                    <tr class="oncall-detail-row" id="${categoryId}-detail" style="display:none; background: ${rowBgColor};">
                                         <td style="padding-left: 60px;">
-                                            └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #667eea; font-weight: bold; text-decoration: none;">${ticket.key}</a>
+                                            └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: ${linkColor}; font-weight: bold; text-decoration: none;">${ticket.key}</a>
                                         </td>
-                                        <td colspan="4" style="font-size: 0.9em; color: #666;">
+                                        <td colspan="3" style="font-size: 0.9em; color: #666;">
                                             ${ticket.summary}
                                             <div style="font-size: 0.85em; color: #999; margin-top: 4px;">
                                                 📅 Created: ${createdStr} | Priority: <span style="color: ${priorityColor}; font-weight: bold;">${ticket.priority}</span> | Status: ${ticket.status}
                                             </div>
                                         </td>
-                                        <td colspan="2"></td>
+                                        <td colspan="2" style="text-align: center; color: ${responseColor}; font-weight: bold;">${responseDisplay}</td>
+                                        <td></td>
                                     </tr>
                                 `;
                             });
