@@ -12,7 +12,7 @@ const cfg = loadEnvConfig();
 async function main() {
   ensureDataDir();
   const timestamp = new Date().toISOString().replace(/[:.]/g,'-');
-  
+
   // Initialize Opsgenie if configured
   let scheduleId = null;
   if (cfg.OPSGENIE_API_KEY) {
@@ -22,7 +22,7 @@ async function main() {
       console.warn('Opsgenie initialization failed, continuing without on-call data:', error.message);
     }
   }
-  
+
   let issues;
   if (cfg.JIRA_DRY_RUN) {
     issues = loadSampleIssues();
@@ -33,58 +33,63 @@ async function main() {
     if (issues.length === 0 && cfg.JIRA_PROJECT_KEY) {
       const fallback = await fetchViaProject({ projectKey: cfg.JIRA_PROJECT_KEY, maxIssues: Number(cfg.JIRA_MAX_ISSUES) || 50 });
       console.log(`Project browse fallback returned ${fallback.length} issues.`);
-      
+
       // Compute metrics first to get assignment dates
       const fallbackMetrics = fallback.map(computeMetrics);
-      
+
       // Filter by assignment date OR creation date
       const startDate = cfg.JIRA_START_DATE ? new Date(cfg.JIRA_START_DATE) : null;
       const endDate = cfg.JIRA_END_DATE ? new Date(cfg.JIRA_END_DATE) : null;
-      
+
       const filteredMetrics = fallbackMetrics.filter(metric => {
         // Check if created in range
         const created = metric.created ? new Date(metric.created) : null;
-        const createdInRange = created && 
-          (!startDate || created >= startDate) && 
+        const createdInRange = created &&
+          (!startDate || created >= startDate) &&
           (!endDate || created <= endDate);
-        
+
         // Check if assigned in range
         const assigned = metric.firstAssignmentTime ? new Date(metric.firstAssignmentTime) : null;
-        const assignedInRange = assigned && 
-          (!startDate || assigned >= startDate) && 
+        const assignedInRange = assigned &&
+          (!startDate || assigned >= startDate) &&
           (!endDate || assigned <= endDate);
-        
+
         // Include if either created OR assigned in range
         return createdInRange || assignedInRange;
       });
-      
+
       // Map back to original issues for further processing
       const filteredKeys = new Set(filteredMetrics.map(m => m.key));
       issues = fallback.filter(issue => filteredKeys.has(issue.key));
-      
+
       console.log(`After date filtering (creation or assignment): ${issues.length} issues.`);
     }
   }
-  
+
   let metrics = issues.map(computeMetrics);
-  
+
   // Enrich metrics with Opsgenie on-call data
   if (scheduleId && cfg.OPSGENIE_API_KEY) {
     console.log('Fetching on-call schedule data from Opsgenie...');
     const timestamps = metrics.map(m => m.created).filter(Boolean);
     const onCallMap = await getOnCallForTimestamps(scheduleId, timestamps, cfg.OPSGENIE_API_KEY);
-    
-    // Add whoWasOnCall to each metric
-    metrics = metrics.map(m => ({
-      ...m,
-      whoWasOnCall: m.created ? onCallMap.get(m.created) : null
-    }));
-    
+
+    // Add whoWasOnCall and shift times to each metric
+    metrics = metrics.map(m => {
+      const onCallData = m.created ? onCallMap.get(m.created) : null;
+      return {
+        ...m,
+        whoWasOnCall: onCallData?.name || null,
+        onCallShiftStart: onCallData?.shiftStart || null,
+        onCallShiftEnd: onCallData?.shiftEnd || null
+      };
+    });
+
     console.log(`Enriched ${metrics.length} tickets with on-call schedule data`);
   }
-  
+
   const summary = summarize(metrics);
-  
+
   // Calculate KPIs before saving
   const tempOut = { generatedAt: new Date().toISOString(), summary, metrics };
   const kpis = calculateSLAKPIs(tempOut);
@@ -92,16 +97,16 @@ async function main() {
     start: cfg.JIRA_START_DATE || 'N/A',
     end: cfg.JIRA_END_DATE || 'N/A'
   };
-  
+
   // Include KPIs and period in the output JSON
   const out = { generatedAt: new Date().toISOString(), period, summary, metrics, kpis };
   const jsonPath = path.join('data', `metrics-${timestamp}.json`);
   fs.writeFileSync(jsonPath, JSON.stringify(out, null, 2));
   writeSummaryCsv(metrics);
-  
+
   // Save KPI snapshot for historical tracking
   saveKPISnapshot(kpis, period);
-  
+
   console.log('Summary:', summary);
   console.log('SLA Compliance Rate:', kpis.overall.complianceRate + '%');
   console.log('Wrote metrics file:', jsonPath);
