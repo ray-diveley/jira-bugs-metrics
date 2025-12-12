@@ -70,15 +70,32 @@ async function main() {
   
   // Enrich metrics with Opsgenie on-call data
   if (scheduleId && cfg.OPSGENIE_API_KEY) {
-    console.log('Fetching on-call schedule data from Opsgenie...');
-    const timestamps = metrics.map(m => m.created).filter(Boolean);
-    const onCallMap = await getOnCallForTimestamps(scheduleId, timestamps, cfg.OPSGENIE_API_KEY);
+    console.log('Fetching on-call schedule timeline from Opsgenie...');
     
-    // Add whoWasOnCall to each metric
-    metrics = metrics.map(m => ({
-      ...m,
-      whoWasOnCall: m.created ? onCallMap.get(m.created) : null
-    }));
+    // Fetch entire schedule timeline once (much more efficient than per-ticket lookups)
+    const { getScheduleTimeline, findShiftAtTime } = await import('./opsgenieClient.js');
+    const shifts = await getScheduleTimeline(
+      scheduleId, 
+      cfg.JIRA_START_DATE, 
+      cfg.JIRA_END_DATE, 
+      cfg.OPSGENIE_API_KEY
+    );
+    
+    console.log(`Fetched ${shifts.length} on-call shifts from timeline`);
+    
+    // Add whoWasOnCall and shift boundaries to each metric
+    metrics = metrics.map(m => {
+      if (m.created) {
+        const shift = findShiftAtTime(shifts, m.created);
+        return {
+          ...m,
+          whoWasOnCall: shift.person,
+          onCallShiftStart: shift.shiftStart,
+          onCallShiftEnd: shift.shiftEnd
+        };
+      }
+      return m;
+    });
     
     console.log(`Enriched ${metrics.length} tickets with on-call schedule data`);
   }

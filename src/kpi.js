@@ -52,40 +52,104 @@ export function calculateSLAKPIs(metricsData) {
       const onCallPerson = emailToName[whoWasOnCall] || whoWasOnCall;
       if (ON_CALL_MANAGERS.includes(onCallPerson)) {
         const onCallResponseMinutes = ticket.timeToFirstOnCallActionMinutes;
+        const shiftStart = ticket.onCallShiftStart ? new Date(ticket.onCallShiftStart) : null;
+        const shiftEnd = ticket.onCallShiftEnd ? new Date(ticket.onCallShiftEnd) : null;
         
         if (onCallResponseMinutes === null) {
+          // No response yet - check if still during their shift or if shift has ended
           const createdDate = new Date(ticket.created);
           const now = new Date();
-          const businessMinutes = calculateBusinessMinutes(createdDate, now);
-          slaResults.push({
-            ticket: ticket.key,
-            manager: onCallPerson,
-            role: 'on-call',
-            met: businessMinutes <= goalMinutes,
-            responseMinutes: null,
-            businessMinutes,
-            actualMinutes: (now - createdDate) / (1000 * 60),
-            goalMinutes,
-            createdOutsideHours,
-            createdContext,
-            status: 'pending'
-          });
+          
+          // Determine when accountability starts: shift start if ticket created before shift, otherwise creation time
+          const accountabilityStart = shiftStart && createdDate < shiftStart ? shiftStart : createdDate;
+          
+          // If we have shift boundaries, check if response should have happened during shift
+          if (shiftEnd && now > shiftEnd) {
+            // Shift ended without response - measure time from accountability start to shift end
+            const shiftDurationMinutes = (shiftEnd - accountabilityStart) / (1000 * 60);
+            slaResults.push({
+              ticket: ticket.key,
+              manager: onCallPerson,
+              role: 'on-call',
+              met: false, // No response during shift = breach
+              responseMinutes: null,
+              businessMinutes: shiftDurationMinutes,
+              actualMinutes: (now - createdDate) / (1000 * 60),
+              goalMinutes,
+              createdOutsideHours,
+              createdContext,
+              status: 'pending',
+              shiftEnded: true,
+              createdBeforeShift: createdDate < shiftStart
+            });
+          } else {
+            // Still during shift or no shift data - measure business hours from accountability start
+            const businessMinutes = calculateBusinessMinutes(accountabilityStart, now, onCallPerson);
+            slaResults.push({
+              ticket: ticket.key,
+              manager: onCallPerson,
+              role: 'on-call',
+              met: businessMinutes <= goalMinutes,
+              responseMinutes: null,
+              businessMinutes,
+              actualMinutes: (now - createdDate) / (1000 * 60),
+              goalMinutes,
+              createdOutsideHours,
+              createdContext,
+              status: 'pending',
+              shiftEnded: false,
+              createdBeforeShift: createdDate < shiftStart
+            });
+          }
         } else {
-          // Calculate business hours between creation and response
-          const businessMinutes = calculateBusinessMinutes(ticket.created, ticket.firstOnCallActionTime);
-          slaResults.push({
-            ticket: ticket.key,
-            manager: onCallPerson,
-            role: 'on-call',
-            met: businessMinutes <= goalMinutes,
-            responseMinutes: onCallResponseMinutes,
-            businessMinutes,
-            actualMinutes: onCallResponseMinutes,
-            goalMinutes,
-            createdOutsideHours,
-            createdContext,
-            status: 'responded'
-          });
+          // Has response - check if it was during their shift
+          const createdDate = new Date(ticket.created);
+          const responseDate = new Date(ticket.firstOnCallActionTime);
+          
+          // Determine when accountability starts: shift start if ticket created before shift, otherwise creation time
+          const accountabilityStart = shiftStart && createdDate < shiftStart ? shiftStart : createdDate;
+          
+          // If we have shift boundaries, check if response was during shift
+          if (shiftEnd && responseDate > shiftEnd) {
+            // Responded after shift ended - breach (passed to next person)
+            // Measure time from accountability start to shift end
+            const shiftDurationMinutes = (shiftEnd - accountabilityStart) / (1000 * 60);
+            slaResults.push({
+              ticket: ticket.key,
+              manager: onCallPerson,
+              role: 'on-call',
+              met: false, // Responded after shift = breach
+              responseMinutes: onCallResponseMinutes,
+              businessMinutes: shiftDurationMinutes,
+              actualMinutes: onCallResponseMinutes,
+              goalMinutes,
+              createdOutsideHours,
+              createdContext,
+              status: 'responded-after-shift',
+              respondedAfterShift: true,
+              createdBeforeShift: createdDate < shiftStart
+            });
+          } else {
+            // Responded during shift - calculate business hours from accountability start
+            const effectiveResponseTime = shiftEnd && responseDate > shiftEnd ? shiftEnd : responseDate;
+            const businessMinutes = calculateBusinessMinutes(accountabilityStart, effectiveResponseTime, onCallPerson);
+            
+            slaResults.push({
+              ticket: ticket.key,
+              manager: onCallPerson,
+              role: 'on-call',
+              met: businessMinutes <= goalMinutes,
+              responseMinutes: onCallResponseMinutes,
+              businessMinutes,
+              actualMinutes: onCallResponseMinutes,
+              goalMinutes,
+              createdOutsideHours,
+              createdContext,
+              status: 'responded',
+              respondedDuringShift: true,
+              createdBeforeShift: createdDate < shiftStart
+            });
+          }
         }
       }
     }
@@ -104,7 +168,7 @@ export function calculateSLAKPIs(metricsData) {
         if (ticket.resolutionDate) {
           const assignmentDate = new Date(ticket.firstAssignmentTime);
           const resolutionDate = new Date(ticket.resolutionDate);
-          const businessMinutes = calculateBusinessMinutes(assignmentDate, resolutionDate);
+          const businessMinutes = calculateBusinessMinutes(assignmentDate, resolutionDate, ticket.assigneeCurrent);
           const actualMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
           slaResults.push({
             ticket: ticket.key,
@@ -123,7 +187,7 @@ export function calculateSLAKPIs(metricsData) {
           // Not resolved either - still pending
           const assignmentDate = new Date(ticket.firstAssignmentTime);
           const now = new Date();
-          const businessMinutes = calculateBusinessMinutes(assignmentDate, now);
+          const businessMinutes = calculateBusinessMinutes(assignmentDate, now, ticket.assigneeCurrent);
           const actualMinutes = (now - assignmentDate) / (1000 * 60);
           slaResults.push({
             ticket: ticket.key,
@@ -142,7 +206,7 @@ export function calculateSLAKPIs(metricsData) {
       } else {
         const assignmentDate = new Date(ticket.firstAssignmentTime);
         const responseDate = new Date(ticket.firstAssigneeCommentTime);
-        const businessMinutes = calculateBusinessMinutes(assignmentDate, responseDate);
+        const businessMinutes = calculateBusinessMinutes(assignmentDate, responseDate, ticket.assigneeCurrent);
         slaResults.push({
           ticket: ticket.key,
           manager: ticket.assigneeCurrent,

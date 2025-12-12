@@ -209,12 +209,14 @@ export function computeMetrics(issue) {
   }
 
   // Calculate business hours for key metrics
+  // On-call action uses default (EST) timezone since tickets come from US/UK customers
   const businessHoursToFirstOnCallAction = firstOnCallActionTime 
     ? calculateBusinessMinutes(created, firstOnCallActionTime)
     : null;
   
-  const businessHoursToFirstAssigneeComment = (firstAssignmentTime && firstAssigneeCommentTime)
-    ? calculateBusinessMinutes(firstAssignmentTime, firstAssigneeCommentTime)
+  // Assignee response uses assignee's timezone for fair measurement
+  const businessHoursToFirstAssigneeComment = (firstAssignmentTime && firstAssigneeCommentTime && assignee)
+    ? calculateBusinessMinutes(firstAssignmentTime, firstAssigneeCommentTime, assignee)
     : null;
 
   return {

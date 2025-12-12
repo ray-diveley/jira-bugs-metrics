@@ -70,13 +70,13 @@ export async function getScheduleId(scheduleName, apiKey) {
 }
 
 /**
- * Get who was on-call at a specific time
+ * Get on-call shift details at a specific time
  * @param {string} scheduleId - The Opsgenie schedule ID
  * @param {string} timestamp - ISO timestamp to check
  * @param {string} apiKey - Opsgenie API key
- * @returns {Promise<string|null>} - Name of person on-call, or explanation string for why no one was on-call
+ * @returns {Promise<Object>} - Shift details including person, start, end times
  */
-export async function getOnCallAtTime(scheduleId, timestamp, apiKey) {
+export async function getOnCallShiftAtTime(scheduleId, timestamp, apiKey) {
   try {
     const date = new Date(timestamp);
     const dateStr = date.toISOString();
@@ -84,41 +84,96 @@ export async function getOnCallAtTime(scheduleId, timestamp, apiKey) {
     // Check if date is before Oct 31, 2025 (when schedule started)
     const scheduleStartDate = new Date('2025-10-31T00:00:00Z');
     if (date < scheduleStartDate) {
-      return '[Before Oct 31]';
+      return { person: '[Before Oct 31]', shiftStart: null, shiftEnd: null };
     }
     
+    // Get timeline to find the actual shift boundaries
+    // Request a window around the timestamp to get full shift details
+    const windowStart = new Date(date.getTime() - 24 * 60 * 60 * 1000).toISOString(); // 24h before
+    const windowEnd = new Date(date.getTime() + 24 * 60 * 60 * 1000).toISOString(); // 24h after
+    
     const response = await opsgenieRequest(
+      `/schedules/${scheduleId}/timeline?date=${dateStr}&interval=1&intervalUnit=days`,
+      apiKey
+    );
+    
+    if (response.data && response.data.finalTimeline && response.data.finalTimeline.rotations) {
+      const rotations = response.data.finalTimeline.rotations;
+      
+      // Find the rotation/period that contains our timestamp
+      for (const rotation of rotations) {
+        if (rotation.periods) {
+          for (const period of rotation.periods) {
+            const periodStart = new Date(period.startDate);
+            const periodEnd = new Date(period.endDate);
+            
+            if (date >= periodStart && date <= periodEnd && period.recipient) {
+              const email = period.recipient.name || '';
+              const displayName = email.split('@')[0];
+              
+              return {
+                person: displayName,
+                shiftStart: period.startDate,
+                shiftEnd: period.endDate,
+                type: period.type || 'on-call'
+              };
+            }
+          }
+        }
+      }
+    }
+    
+    // Fallback to simple on-call check if timeline doesn't work
+    const fallbackResponse = await opsgenieRequest(
       `/schedules/${scheduleId}/on-calls?date=${dateStr}`,
       apiKey
     );
     
-    if (response.data && response.data.onCallParticipants && response.data.onCallParticipants.length > 0) {
-      // Return the first on-call person's email/name
-      const participant = response.data.onCallParticipants[0];
-      // Convert email to displayable name (e.g., jmaciorowski@m3mr.com -> jmaciorowski)
+    if (fallbackResponse.data && fallbackResponse.data.onCallParticipants && 
+        fallbackResponse.data.onCallParticipants.length > 0) {
+      const participant = fallbackResponse.data.onCallParticipants[0];
       const email = participant.name || '';
       const displayName = email.split('@')[0];
-      return displayName;
+      
+      // Without timeline, we don't know exact shift boundaries
+      return {
+        person: displayName,
+        shiftStart: null,
+        shiftEnd: null,
+        type: 'on-call'
+      };
     }
     
     // No on-call participant found - check if it's weekend or after hours
     const dayOfWeek = date.getUTCDay(); // 0 = Sunday, 6 = Saturday
     if (dayOfWeek === 0 || dayOfWeek === 6) {
-      return '[Weekend]';
+      return { person: '[Weekend]', shiftStart: null, shiftEnd: null };
     }
     
     // Check if it's outside coverage hours (23:00-07:00 UTC)
     const hourUTC = date.getUTCHours();
     if (hourUTC >= 23 || hourUTC < 7) {
-      return '[After Hours]';
+      return { person: '[After Hours]', shiftStart: null, shiftEnd: null };
     }
     
     // Otherwise, unknown reason for no coverage
-    return '[No Coverage]';
+    return { person: '[No Coverage]', shiftStart: null, shiftEnd: null };
   } catch (error) {
     console.error(`Error fetching on-call for ${timestamp}:`, error.message);
-    return '[Error]';
+    return { person: '[Error]', shiftStart: null, shiftEnd: null };
   }
+}
+
+/**
+ * Get who was on-call at a specific time (backward compatible - returns just the person)
+ * @param {string} scheduleId - The Opsgenie schedule ID
+ * @param {string} timestamp - ISO timestamp to check
+ * @param {string} apiKey - Opsgenie API key
+ * @returns {Promise<string|null>} - Name of person on-call, or explanation string for why no one was on-call
+ */
+export async function getOnCallAtTime(scheduleId, timestamp, apiKey) {
+  const shift = await getOnCallShiftAtTime(scheduleId, timestamp, apiKey);
+  return shift.person;
 }
 
 /**
@@ -146,6 +201,93 @@ export async function getOnCallForTimestamps(scheduleId, timestamps, apiKey) {
   }
   
   return results;
+}
+
+/**
+ * Fetch full schedule timeline for a date range (more efficient than per-ticket lookups)
+ * @param {string} scheduleId - The Opsgenie schedule ID
+ * @param {string} startDate - ISO date string for range start
+ * @param {string} endDate - ISO date string for range end
+ * @param {string} apiKey - Opsgenie API key
+ * @returns {Promise<Array>} - Array of shift objects with person, start, end times
+ */
+export async function getScheduleTimeline(scheduleId, startDate, endDate, apiKey) {
+  try {
+    // Calculate the number of days in the range
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    
+    const response = await opsgenieRequest(
+      `/schedules/${scheduleId}/timeline?date=${start.toISOString()}&interval=${days}&intervalUnit=days`,
+      apiKey
+    );
+    
+    const shifts = [];
+    
+    if (response.data && response.data.finalTimeline && response.data.finalTimeline.rotations) {
+      for (const rotation of response.data.finalTimeline.rotations) {
+        if (rotation.periods) {
+          for (const period of rotation.periods) {
+            if (period.recipient && period.startDate && period.endDate) {
+              const email = period.recipient.name || '';
+              const displayName = email.split('@')[0];
+              
+              shifts.push({
+                person: displayName,
+                shiftStart: period.startDate,
+                shiftEnd: period.endDate,
+                type: period.type || 'on-call'
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    return shifts;
+  } catch (error) {
+    console.error(`Error fetching schedule timeline:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * Find who was on-call at a specific time from a cached timeline
+ * @param {Array} shifts - Array of shift objects from getScheduleTimeline
+ * @param {string} timestamp - ISO timestamp to check
+ * @returns {Object} - Shift object with person, start, end times
+ */
+export function findShiftAtTime(shifts, timestamp) {
+  const date = new Date(timestamp);
+  
+  // Check if date is before Oct 31, 2025 (when schedule started)
+  const scheduleStartDate = new Date('2025-10-31T00:00:00Z');
+  if (date < scheduleStartDate) {
+    return { person: '[Before Oct 31]', shiftStart: null, shiftEnd: null };
+  }
+  
+  for (const shift of shifts) {
+    const shiftStart = new Date(shift.shiftStart);
+    const shiftEnd = new Date(shift.shiftEnd);
+    
+    if (date >= shiftStart && date <= shiftEnd) {
+      return shift;
+    }
+  }
+  
+  // No shift found - check if weekend or after hours
+  const dayOfWeek = date.getUTCDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return { person: '[Weekend]', shiftStart: null, shiftEnd: null };
+  }
+  
+  const hourUTC = date.getUTCHours();
+  if (hourUTC >= 23 || hourUTC < 7) {
+    return { person: '[After Hours]', shiftStart: null, shiftEnd: null };
+  }
+  
+  return { person: '[No Coverage]', shiftStart: null, shiftEnd: null };
 }
 
 /**
