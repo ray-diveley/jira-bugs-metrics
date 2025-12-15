@@ -1111,15 +1111,25 @@
                             }
                         }
                         
-                        if (!assignedBy) {
+                        // Check who actually took the first action (not just who assigned)
+                        // Use firstOnCallActionTime to determine if the on-call person responded
+                        if (!issue.firstOnCallActionTime) {
+                            // No action taken yet
                             stats.noResponse++;
-                        } else if (assignedBy === whoWasOnCall) {
-                            stats.respondedTo++;
-                            if (issue.businessHoursToFirstOnCallAction !== null) {
-                                stats.responseTimes.push(issue.businessHoursToFirstOnCallAction);
-                            }
                         } else {
-                            stats.someoneElseHandled++;
+                            // Someone took action - check if it was the on-call person
+                            // We need to map the email back to check
+                            const firstResponder = issue.assignedBy; // This is who took first action
+                            
+                            if (firstResponder === whoWasOnCall) {
+                                stats.respondedTo++;
+                                if (issue.businessHoursToFirstOnCallAction !== null) {
+                                    stats.responseTimes.push(issue.businessHoursToFirstOnCallAction);
+                                }
+                            } else {
+                                // Someone other than on-call person took first action
+                                stats.someoneElseHandled++;
+                            }
                         }
                     }
                 });

@@ -20,12 +20,14 @@ function buildJql() {
   if (JIRA_JQL && JIRA_JQL.trim().length) return JIRA_JQL.trim();
   const parts = [];
   if (JIRA_PROJECT_KEY) parts.push(`project = "${JIRA_PROJECT_KEY}"`);
-  if (JIRA_ISSUE_TYPES) {
+  // Optional: Filter by issue types (leave empty to include all types)
+  if (JIRA_ISSUE_TYPES && JIRA_ISSUE_TYPES.trim().length > 0) {
     const types = JIRA_ISSUE_TYPES.split(',').map(s => s.trim()).filter(Boolean);
     if (types.length === 1) parts.push(`issuetype = "${types[0]}"`);
     else if (types.length) parts.push(`issuetype in (${types.map(t=>`"${t}"`).join(', ')})`);
   }
-  if (JIRA_STATUS_NAMES) {
+  // Optional: Filter by status names (leave empty to include all statuses)
+  if (JIRA_STATUS_NAMES && JIRA_STATUS_NAMES.trim().length > 0) {
     const statuses = JIRA_STATUS_NAMES.split(',').map(s => s.trim()).filter(Boolean);
     if (statuses.length === 1) parts.push(`status = "${statuses[0]}"`);
     else if (statuses.length) parts.push(`status in (${statuses.map(s=>`"${s}"`).join(', ')})`);

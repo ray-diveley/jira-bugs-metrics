@@ -25,8 +25,8 @@ npm install
 | `JIRA_API_TOKEN` | API token (keep secret, never commit) |
 | `JIRA_JQL` | (Optional) Explicit JQL. If set, overrides auto-builder. |
 | `JIRA_PROJECT_KEY` | Project key for auto-builder |
-| `JIRA_ISSUE_TYPES` | Comma list of issue types to include |
-| `JIRA_STATUS_NAMES` | Comma list of statuses to include |
+| `JIRA_ISSUE_TYPES` | (Optional) Comma list of issue types to include. Leave empty for all types. |
+| `JIRA_STATUS_NAMES` | (Optional) Comma list of statuses to include. Leave empty for all statuses. |
 | `JIRA_START_DATE` / `JIRA_END_DATE` | Optional created date bounds (YYYY-MM-DD) |
 | `JIRA_MAX_ISSUES` | Limit number of issues (blank = all) |
 | `JIRA_DRY_RUN` | `true` to use sample data (no API) |
