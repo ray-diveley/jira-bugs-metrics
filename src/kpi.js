@@ -6,7 +6,7 @@ import { calculateBusinessMinutes, isOutsideBusinessHours, getCreatedTimeContext
 
 export function calculateSLAKPIs(metricsData) {
   const { metrics } = metricsData;
-  
+
   // Define on-call managers
   const ON_CALL_MANAGERS = [
     'Brad Goldberg',
@@ -17,15 +17,15 @@ export function calculateSLAKPIs(metricsData) {
     'Evgeniy Suhov',
     'Max Kuklin'
   ];
-  
+
   // Overall SLA Performance
   const totalTickets = metrics.length;
   const ticketsWithSLA = metrics.filter(m => m.sla && m.sla.length > 0);
-  
+
   // Calculate SLA compliance
   // Track BOTH on-call manager response AND assignee response
   const slaResults = [];
-  
+
   // Email to name mapping for whoWasOnCall
   const emailToName = {
     'bgoldberg': 'Brad Goldberg',
@@ -34,18 +34,18 @@ export function calculateSLAKPIs(metricsData) {
     'gsemenenko': 'Grigoriy Semenenko',
     'rdahl': 'Randy Dahl',
     'esuhov': 'Evgeniy Suhov',
-    'mkulkin': 'Max Kuklin'
+    'mkuklin': 'Max Kuklin'
   };
-  
+
   ticketsWithSLA.forEach(ticket => {
     const sla = ticket.sla[0]; // First SLA entry
     const goalHours = sla.goalDuration / (1000 * 60 * 60);
     const goalMinutes = goalHours * 60;
-    
+
     // Check if ticket was created outside business hours
     const createdOutsideHours = isOutsideBusinessHours(ticket.created);
     const createdContext = getCreatedTimeContext(ticket.created);
-    
+
     // Track the on-call person (who was actually on-call when ticket was created)
     const whoWasOnCall = ticket.whoWasOnCall;
     if (whoWasOnCall && !whoWasOnCall.startsWith('[')) {
@@ -54,15 +54,15 @@ export function calculateSLAKPIs(metricsData) {
         const onCallResponseMinutes = ticket.timeToFirstOnCallActionMinutes;
         const shiftStart = ticket.onCallShiftStart ? new Date(ticket.onCallShiftStart) : null;
         const shiftEnd = ticket.onCallShiftEnd ? new Date(ticket.onCallShiftEnd) : null;
-        
+
         if (onCallResponseMinutes === null) {
           // No response yet - check if still during their shift or if shift has ended
           const createdDate = new Date(ticket.created);
           const now = new Date();
-          
+
           // Determine when accountability starts: shift start if ticket created before shift, otherwise creation time
           const accountabilityStart = shiftStart && createdDate < shiftStart ? shiftStart : createdDate;
-          
+
           // If we have shift boundaries, check if response should have happened during shift
           if (shiftEnd && now > shiftEnd) {
             // Shift ended without response - measure time from accountability start to shift end
@@ -105,10 +105,10 @@ export function calculateSLAKPIs(metricsData) {
           // Has response - check if it was during their shift
           const createdDate = new Date(ticket.created);
           const responseDate = new Date(ticket.firstOnCallActionTime);
-          
+
           // Determine when accountability starts: shift start if ticket created before shift, otherwise creation time
           const accountabilityStart = shiftStart && createdDate < shiftStart ? shiftStart : createdDate;
-          
+
           // If we have shift boundaries, check if response was during shift
           if (shiftEnd && responseDate > shiftEnd) {
             // Responded after shift ended - breach (passed to next person)
@@ -133,7 +133,7 @@ export function calculateSLAKPIs(metricsData) {
             // Responded during shift - calculate business hours from accountability start
             const effectiveResponseTime = shiftEnd && responseDate > shiftEnd ? shiftEnd : responseDate;
             const businessMinutes = calculateBusinessMinutes(accountabilityStart, effectiveResponseTime, onCallPerson);
-            
+
             slaResults.push({
               ticket: ticket.key,
               manager: onCallPerson,
@@ -153,16 +153,16 @@ export function calculateSLAKPIs(metricsData) {
         }
       }
     }
-    
+
     // Track the assignee response (if different from on-call manager and is also a manager)
-    if (ticket.assigneeCurrent && 
+    if (ticket.assigneeCurrent &&
         ticket.assigneeCurrent !== ticket.assignedBy &&
         ON_CALL_MANAGERS.includes(ticket.assigneeCurrent) &&
         ticket.firstAssignmentTime) {
       const assigneeResponseMinutes = ticket.timeToFirstAssigneeCommentMinutes;
       const assignmentOutsideHours = isOutsideBusinessHours(ticket.firstAssignmentTime);
       const assignmentContext = getCreatedTimeContext(ticket.firstAssignmentTime);
-      
+
       if (assigneeResponseMinutes === null) {
         // No comment - check if resolved instead
         if (ticket.resolutionDate) {
@@ -223,27 +223,27 @@ export function calculateSLAKPIs(metricsData) {
       }
     }
   });
-  
+
   const metCount = slaResults.filter(r => r.met).length;
   const breachedCount = slaResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
   const pendingCount = slaResults.filter(r => r.status === 'pending').length;
-  
+
   const complianceRate = totalTickets > 0 ? (metCount / totalTickets) * 100 : 0;
-  
+
   // Separate on-call and assignee metrics
   const onCallResults = slaResults.filter(r => r.role === 'on-call');
   const assigneeResults = slaResults.filter(r => r.role === 'assignee');
-  
+
   const onCallMet = onCallResults.filter(r => r.met).length;
   const onCallBreached = onCallResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
   const onCallPending = onCallResults.filter(r => r.status === 'pending').length;
   const onCallCompliance = onCallResults.length > 0 ? ((onCallMet / onCallResults.length) * 100).toFixed(1) : '0.0';
-  
+
   const assigneeMet = assigneeResults.filter(r => r.met).length;
   const assigneeBreached = assigneeResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
   const assigneePending = assigneeResults.filter(r => r.status === 'pending').length;
   const assigneeCompliance = assigneeResults.length > 0 ? ((assigneeMet / assigneeResults.length) * 100).toFixed(1) : '0.0';
-  
+
   // Manager-level performance (COMBINED - both roles)
   const managerPerformance = {};
   slaResults.forEach(result => {
@@ -259,7 +259,7 @@ export function calculateSLAKPIs(metricsData) {
       managerPerformance[result.manager].breached++;
     }
   });
-  
+
   // Calculate compliance rate for each manager (combined)
   const managerKPIs = Object.entries(managerPerformance).map(([manager, stats]) => ({
     manager,
@@ -267,7 +267,7 @@ export function calculateSLAKPIs(metricsData) {
     complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
     avgResponseTime: calculateAvgResponseTime(slaResults.filter(r => r.manager === manager))
   })).sort((a, b) => b.complianceRate - a.complianceRate);
-  
+
   // ON-CALL performance (first response to new tickets)
   const onCallPerformance = {};
   onCallResults.forEach(result => {
@@ -283,14 +283,14 @@ export function calculateSLAKPIs(metricsData) {
       onCallPerformance[result.manager].breached++;
     }
   });
-  
+
   const onCallManagerKPIs = Object.entries(onCallPerformance).map(([manager, stats]) => ({
     manager,
     ...stats,
     complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
     avgResponseTime: calculateAvgResponseTime(onCallResults.filter(r => r.manager === manager && (r.status === 'responded' || r.status === 'resolved')))
   })).sort((a, b) => b.complianceRate - a.complianceRate);
-  
+
   // DEVELOPER performance (response after being assigned)
   const developerPerformance = {};
   assigneeResults.forEach(result => {
@@ -306,21 +306,21 @@ export function calculateSLAKPIs(metricsData) {
       developerPerformance[result.manager].breached++;
     }
   });
-  
+
   const developerKPIs = Object.entries(developerPerformance).map(([developer, stats]) => ({
     developer,
     ...stats,
     complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
     avgResponseTime: calculateAvgResponseTime(assigneeResults.filter(r => r.manager === developer && (r.status === 'responded' || r.status === 'resolved')))
   })).sort((a, b) => b.complianceRate - a.complianceRate);
-  
+
   // Time-based analysis
   const byDayOfWeek = analyzeByDayOfWeek(metrics);
   const byHourOfDay = analyzeByHourOfDay(metrics);
-  
+
   // Response time distribution
   const responseTimeDistribution = categorizeResponseTimes(slaResults);
-  
+
   return {
     overall: {
       totalTickets,
@@ -370,17 +370,17 @@ function calculateAvgResponseTime(results) {
 function analyzeByDayOfWeek(metrics) {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const analysis = {};
-  
+
   metrics.forEach(m => {
     const created = new Date(m.created);
     const dayName = days[created.getDay()];
-    
+
     if (!analysis[dayName]) {
       analysis[dayName] = { total: 0, met: 0, breached: 0 };
     }
-    
+
     analysis[dayName].total++;
-    
+
     if (m.sla && m.sla.length > 0 && m.businessHoursToFirstOnCallAction !== null && m.businessHoursToFirstOnCallAction !== undefined) {
       const goalMinutes = m.sla[0].goalDuration / (1000 * 60);
       if (m.businessHoursToFirstOnCallAction <= goalMinutes) {
@@ -390,7 +390,7 @@ function analyzeByDayOfWeek(metrics) {
       }
     }
   });
-  
+
   return Object.entries(analysis).map(([day, stats]) => ({
     day,
     ...stats,
@@ -400,17 +400,17 @@ function analyzeByDayOfWeek(metrics) {
 
 function analyzeByHourOfDay(metrics) {
   const analysis = {};
-  
+
   metrics.forEach(m => {
     const created = new Date(m.created);
     const hour = created.getHours();
-    
+
     if (!analysis[hour]) {
       analysis[hour] = { total: 0, met: 0, breached: 0 };
     }
-    
+
     analysis[hour].total++;
-    
+
     if (m.sla && m.sla.length > 0 && m.businessHoursToFirstOnCallAction !== null && m.businessHoursToFirstOnCallAction !== undefined) {
       const goalMinutes = (m.sla[0].goalDuration / (1000 * 60));
       if (m.businessHoursToFirstOnCallAction <= goalMinutes) {
@@ -420,7 +420,7 @@ function analyzeByHourOfDay(metrics) {
       }
     }
   });
-  
+
   return Object.entries(analysis).map(([hour, stats]) => ({
     hour: `${hour.padStart(2, '0')}:00`,
     ...stats,
@@ -437,7 +437,7 @@ function categorizeResponseTimes(results) {
     'Over 8 hours': 0,
     'No response': 0
   };
-  
+
   results.forEach(r => {
     const minutes = r.businessMinutes !== null && r.businessMinutes !== undefined ? r.businessMinutes : r.responseMinutes;
     if (minutes === null || minutes === undefined) {
@@ -454,7 +454,7 @@ function categorizeResponseTimes(results) {
       categories['Over 8 hours']++;
     }
   });
-  
+
   return categories;
 }
 
@@ -465,10 +465,10 @@ export function comparePeriods(currentKPIs, previousKPIs) {
   if (!previousKPIs) {
     return { hasPrevious: false };
   }
-  
+
   const complianceChange = parseFloat(currentKPIs.overall.complianceRate) - parseFloat(previousKPIs.overall.complianceRate);
   const ticketChange = currentKPIs.overall.totalTickets - previousKPIs.overall.totalTickets;
-  
+
   return {
     hasPrevious: true,
     complianceChange: complianceChange.toFixed(1),
@@ -481,7 +481,7 @@ export function comparePeriods(currentKPIs, previousKPIs) {
 
 function compareManagers(current, previous) {
   const comparison = [];
-  
+
   current.forEach(curr => {
     const prev = previous.find(p => p.manager === curr.manager);
     if (prev) {
@@ -495,7 +495,7 @@ function compareManagers(current, previous) {
       });
     }
   });
-  
+
   return comparison;
 }
 
@@ -511,7 +511,7 @@ export function saveKPISnapshot(kpis, filepath) {
     },
     kpis
   };
-  
+
   return snapshot;
 }
 
@@ -528,11 +528,11 @@ export function getPersonalTrends(history, personName) {
     developerTrends: [],
     combinedTrends: []
   };
-  
+
   history.forEach(snapshot => {
     const date = snapshot.timestamp;
     const period = `${snapshot.period.start} to ${snapshot.period.end}`;
-    
+
     // On-call performance
     const onCallPerf = snapshot.kpis.onCallManagerKPIs?.find(k => k.manager === personName);
     if (onCallPerf) {
@@ -546,7 +546,7 @@ export function getPersonalTrends(history, personName) {
         avgResponseTime: onCallPerf.avgResponseTime
       });
     }
-    
+
     // Developer performance
     const devPerf = snapshot.kpis.developerKPIs?.find(k => k.developer === personName);
     if (devPerf) {
@@ -560,7 +560,7 @@ export function getPersonalTrends(history, personName) {
         avgResponseTime: devPerf.avgResponseTime
       });
     }
-    
+
     // Combined performance
     const combinedPerf = snapshot.kpis.managerKPIs?.find(k => k.manager === personName);
     if (combinedPerf) {
@@ -575,7 +575,7 @@ export function getPersonalTrends(history, personName) {
       });
     }
   });
-  
+
   return trends;
 }
 
@@ -591,7 +591,7 @@ export function comparePerformanceByRole(currentKPIs, previousKPIs) {
     developerComparison: [],
     combinedComparison: []
   };
-  
+
   // On-call manager comparison
   if (currentKPIs.onCallManagerKPIs && previousKPIs.onCallManagerKPIs) {
     currentKPIs.onCallManagerKPIs.forEach(curr => {
@@ -610,7 +610,7 @@ export function comparePerformanceByRole(currentKPIs, previousKPIs) {
       }
     });
   }
-  
+
   // Developer comparison
   if (currentKPIs.developerKPIs && previousKPIs.developerKPIs) {
     currentKPIs.developerKPIs.forEach(curr => {
@@ -629,7 +629,7 @@ export function comparePerformanceByRole(currentKPIs, previousKPIs) {
       }
     });
   }
-  
+
   // Combined comparison
   if (currentKPIs.managerKPIs && previousKPIs.managerKPIs) {
     currentKPIs.managerKPIs.forEach(curr => {
@@ -648,6 +648,6 @@ export function comparePerformanceByRole(currentKPIs, previousKPIs) {
       }
     });
   }
-  
+
   return comparison;
 }
