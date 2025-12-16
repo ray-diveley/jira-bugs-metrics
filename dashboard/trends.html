@@ -345,6 +345,12 @@
   <script>
     let historyData = null;
     
+    // Cap compliance rate at 100% (fixes historical data that had >100% due to double counting)
+    function capRate(rate) {
+      const num = parseFloat(rate);
+      return Math.min(100, num).toFixed(1);
+    }
+    
     async function loadTrends() {
       try {
         const response = await fetch('/api/kpi-history');
@@ -392,8 +398,8 @@
       const p1 = historyData.snapshots[idx1];
       const p2 = historyData.snapshots[idx2];
       
-      // Overall comparison
-      const complianceChange = parseFloat(p1.kpis.overall.complianceRate) - parseFloat(p2.kpis.overall.complianceRate);
+      // Overall comparison (cap at 100%)
+      const complianceChange = parseFloat(capRate(p1.kpis.overall.complianceRate)) - parseFloat(capRate(p2.kpis.overall.complianceRate));
       const ticketChange = p1.kpis.overall.totalTickets - p2.kpis.overall.totalTickets;
       const ticketGrowth = p2.kpis.overall.totalTickets > 0 
         ? ((ticketChange / p2.kpis.overall.totalTickets) * 100).toFixed(1) 
@@ -401,12 +407,12 @@
       
       // On-call comparison
       const onCallChange = p1.kpis.onCall && p2.kpis.onCall 
-        ? parseFloat(p1.kpis.onCall.complianceRate) - parseFloat(p2.kpis.onCall.complianceRate)
+        ? parseFloat(capRate(p1.kpis.onCall.complianceRate)) - parseFloat(capRate(p2.kpis.onCall.complianceRate))
         : null;
       
       // Assignee comparison
       const assigneeChange = p1.kpis.assignee && p2.kpis.assignee
-        ? parseFloat(p1.kpis.assignee.complianceRate) - parseFloat(p2.kpis.assignee.complianceRate)
+        ? parseFloat(capRate(p1.kpis.assignee.complianceRate)) - parseFloat(capRate(p2.kpis.assignee.complianceRate))
         : null;
       
       const html = `
@@ -441,20 +447,20 @@
           
           <div class="trend-card">
             <div class="trend-label">Period 1 (${p1.period.start} to ${p1.period.end})</div>
-            <div class="trend-value">${p1.kpis.overall.complianceRate}%</div>
+            <div class="trend-value">${capRate(p1.kpis.overall.complianceRate)}%</div>
             <div style="color: #718096; font-size: 14px;">
               ${p1.kpis.overall.totalTickets} tickets, ${p1.kpis.overall.metSLA} met SLA
             </div>
-            ${p1.kpis.onCall ? `<div style="color: #667eea; font-size: 13px; margin-top: 5px;">On-Call: ${p1.kpis.onCall.complianceRate}% | Assignee: ${p1.kpis.assignee.complianceRate}%</div>` : ''}
+            ${p1.kpis.onCall ? `<div style="color: #667eea; font-size: 13px; margin-top: 5px;">On-Call: ${capRate(p1.kpis.onCall.complianceRate)}% | Assignee: ${capRate(p1.kpis.assignee.complianceRate)}%</div>` : ''}
           </div>
           
           <div class="trend-card">
             <div class="trend-label">Period 2 (${p2.period.start} to ${p2.period.end})</div>
-            <div class="trend-value">${p2.kpis.overall.complianceRate}%</div>
+            <div class="trend-value">${capRate(p2.kpis.overall.complianceRate)}%</div>
             <div style="color: #718096; font-size: 14px;">
               ${p2.kpis.overall.totalTickets} tickets, ${p2.kpis.overall.metSLA} met SLA
             </div>
-            ${p2.kpis.onCall ? `<div style="color: #667eea; font-size: 13px; margin-top: 5px;">On-Call: ${p2.kpis.onCall.complianceRate}% | Assignee: ${p2.kpis.assignee.complianceRate}%</div>` : ''}
+            ${p2.kpis.onCall ? `<div style="color: #667eea; font-size: 13px; margin-top: 5px;">On-Call: ${capRate(p2.kpis.onCall.complianceRate)}% | Assignee: ${capRate(p2.kpis.assignee.complianceRate)}%</div>` : ''}
           </div>
           
           <div class="trend-card ${ticketChange > 0 ? 'positive' : ticketChange < 0 ? 'negative' : ''}">
@@ -537,7 +543,7 @@
       
       return Object.entries(quarters).map(([quarter, snaps]) => {
         const avgCompliance = (snaps.reduce((sum, s) => 
-          sum + parseFloat(s.kpis.overall.complianceRate), 0
+          sum + parseFloat(capRate(s.kpis.overall.complianceRate)), 0
         ) / snaps.length).toFixed(1);
         
         return { quarter, avgCompliance, count: snaps.length };
@@ -552,11 +558,11 @@
           <td><strong>${s.period.start} to ${s.period.end}</strong></td>
           <td>${new Date(s.timestamp).toLocaleString()}</td>
           <td>${s.kpis.overall.totalTickets}</td>
-          <td><span class="badge ${parseFloat(s.kpis.overall.complianceRate) >= 85 ? 'badge-success' : parseFloat(s.kpis.overall.complianceRate) >= 70 ? 'badge-warning' : 'badge-danger'}">
-            ${s.kpis.overall.complianceRate}%
+          <td><span class="badge ${parseFloat(capRate(s.kpis.overall.complianceRate)) >= 85 ? 'badge-success' : parseFloat(capRate(s.kpis.overall.complianceRate)) >= 70 ? 'badge-warning' : 'badge-danger'}">
+            ${capRate(s.kpis.overall.complianceRate)}%
           </span></td>
-          <td>${s.kpis.onCall ? `<span class="badge ${parseFloat(s.kpis.onCall.complianceRate) >= 85 ? 'badge-success' : parseFloat(s.kpis.onCall.complianceRate) >= 70 ? 'badge-warning' : 'badge-danger'}">${s.kpis.onCall.complianceRate}%</span>` : 'N/A'}</td>
-          <td>${s.kpis.assignee ? `<span class="badge ${parseFloat(s.kpis.assignee.complianceRate) >= 85 ? 'badge-success' : parseFloat(s.kpis.assignee.complianceRate) >= 70 ? 'badge-warning' : 'badge-danger'}">${s.kpis.assignee.complianceRate}%</span>` : 'N/A'}</td>
+          <td>${s.kpis.onCall ? `<span class="badge ${parseFloat(capRate(s.kpis.onCall.complianceRate)) >= 85 ? 'badge-success' : parseFloat(capRate(s.kpis.onCall.complianceRate)) >= 70 ? 'badge-warning' : 'badge-danger'}">${capRate(s.kpis.onCall.complianceRate)}%</span>` : 'N/A'}</td>
+          <td>${s.kpis.assignee ? `<span class="badge ${parseFloat(capRate(s.kpis.assignee.complianceRate)) >= 85 ? 'badge-success' : parseFloat(capRate(s.kpis.assignee.complianceRate)) >= 70 ? 'badge-warning' : 'badge-danger'}">${capRate(s.kpis.assignee.complianceRate)}%</span>` : 'N/A'}</td>
           <td>${s.kpis.overall.metSLA}</td>
           <td>${s.kpis.overall.breachedSLA}</td>
           <td>${s.kpis.topPerformer || 'N/A'} ${s.kpis.topPerformerRate ? '(' + s.kpis.topPerformerRate + '%)' : ''}</td>
@@ -576,22 +582,22 @@
       // Clear canvas
       ctx.clearRect(0, 0, width, height);
       
-      // Prepare data - three separate lines
+      // Prepare data - three separate lines (cap at 100%)
       const overallData = historyData.snapshots.map(s => ({
         date: new Date(s.timestamp),
-        compliance: parseFloat(s.kpis.overall.complianceRate),
+        compliance: parseFloat(capRate(s.kpis.overall.complianceRate)),
         label: `${s.period.start.substring(5)} to ${s.period.end.substring(5)}`
       })).reverse();
       
       const onCallData = historyData.snapshots.map(s => ({
         date: new Date(s.timestamp),
-        compliance: s.kpis.onCall ? parseFloat(s.kpis.onCall.complianceRate) : null,
+        compliance: s.kpis.onCall ? parseFloat(capRate(s.kpis.onCall.complianceRate)) : null,
         label: `${s.period.start.substring(5)} to ${s.period.end.substring(5)}`
       })).reverse();
       
       const assigneeData = historyData.snapshots.map(s => ({
         date: new Date(s.timestamp),
-        compliance: s.kpis.assignee ? parseFloat(s.kpis.assignee.complianceRate) : null,
+        compliance: s.kpis.assignee ? parseFloat(capRate(s.kpis.assignee.complianceRate)) : null,
         label: `${s.period.start.substring(5)} to ${s.period.end.substring(5)}`
       })).reverse();
       
