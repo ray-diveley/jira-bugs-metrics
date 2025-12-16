@@ -331,7 +331,7 @@
     
     <!-- Developer Performance -->
     <div class="section">
-      <h2 class="section-title">💻 Developer Performance <span style="font-size: 14px; color: #718096;">(Response after assignment - business hours)</span></h2>
+      <h2 class="section-title">📱 Assignee Performance <span style="font-size: 14px; color: #718096;">(Response after assignment - business hours)</span></h2>
       <table id="developer-table">
         <thead>
           <tr>
@@ -351,57 +351,182 @@
       </table>
     </div>
     
-    <!-- Combined Performance -->
-    <div class="section">
-      <h2 class="section-title">👥 Combined Performance <span style="font-size: 14px; color: #718096;">(Both on-call and developer roles)</span></h2>
-      <table id="combined-table">
-        <thead>
-          <tr>
-            <th>Person</th>
-            <th>Compliance Rate</th>
-            <th>Met SLA</th>
-            <th>Breached SLA</th>
-            <th>Pending</th>
-            <th>Total Tickets</th>
-            <th>Avg Response Time</th>
-            <th>Performance</th>
-          </tr>
-        </thead>
-        <tbody id="combined-tbody">
-          <tr><td colspan="8" class="loading">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
-    
     <!-- Response Time Distribution -->
     <div class="section">
       <h2 class="section-title">Response Time Distribution</h2>
       <div class="bar-chart" id="response-chart"></div>
     </div>
     
-    <!-- Day of Week Analysis -->
-    <div class="section">
-      <h2 class="section-title">Performance by Day of Week</h2>
-      <table id="day-table">
-        <thead>
-          <tr>
-            <th>Day</th>
-            <th>Total Tickets</th>
-            <th>Met SLA</th>
-            <th>Breached</th>
-            <th>Compliance Rate</th>
-            <th>Progress</th>
-          </tr>
-        </thead>
-        <tbody id="day-tbody">
-          <tr><td colspan="6" class="loading">Loading...</td></tr>
-        </tbody>
-      </table>
-    </div>
+
   </div>
   
   <script>
     let currentKPIs = null;
+    
+    // Calculate KPIs dynamically from raw metrics (matches main dashboard methodology)
+    function calculateDynamicKPIs(metricsData) {
+      const metrics = metricsData.metrics || [];
+      const goalMinutes = metricsData.slaGoalMinutes || 240;
+      
+      // Overall SLA calculation - matches report and dashboard methodology
+      let totalWithSLA = 0;
+      let metSLA = 0;
+      let responseTimes = [];
+      
+      metrics.forEach(issue => {
+        if (issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
+          const firstSla = issue.sla[0];
+          const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
+          
+          if (slaGoalMinutes !== null) {
+            totalWithSLA++;
+            const responseTime = issue.businessHoursToFirstOnCallAction;
+            responseTimes.push(responseTime);
+            
+            const breached = responseTime > slaGoalMinutes;
+            if (!breached) {
+              metSLA++;
+            }
+          }
+        }
+      });
+      
+      const overallComplianceRate = totalWithSLA > 0 ? ((metSLA / totalWithSLA) * 100).toFixed(1) : '0.0';
+      const avgResponseTime = responseTimes.length > 0
+        ? (responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(0) + ' min'
+        : 'N/A';
+      
+      // On-call manager KPIs
+      const managerStats = {};
+      metrics.forEach(issue => {
+        const manager = issue.whoWasOnCall;
+        if (!manager || manager.includes('[')) return; // Skip non-manager entries
+        
+        if (!managerStats[manager]) {
+          managerStats[manager] = { met: 0, breached: 0, pending: 0, total: 0, responseTimes: [] };
+        }
+        
+        if (issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
+          const firstSla = issue.sla[0];
+          const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
+          
+          if (slaGoalMinutes !== null) {
+            managerStats[manager].total++;
+            const responseTime = issue.businessHoursToFirstOnCallAction;
+            managerStats[manager].responseTimes.push(responseTime);
+            
+            const breached = responseTime > slaGoalMinutes;
+            if (!breached) {
+              managerStats[manager].met++;
+            } else {
+              managerStats[manager].breached++;
+            }
+          }
+        }
+      });
+      
+      const onCallManagerKPIs = Object.entries(managerStats).map(([manager, stats]) => {
+        const complianceRate = stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : '0.0';
+        const avgResponseTime = stats.responseTimes.length > 0
+          ? (stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length).toFixed(0) + ' min'
+          : 'N/A';
+        
+        return {
+          manager,
+          complianceRate,
+          met: stats.met,
+          breached: stats.breached,
+          pending: stats.pending,
+          total: stats.total,
+          avgResponseTime
+        };
+      }).sort((a, b) => parseFloat(b.complianceRate) - parseFloat(a.complianceRate));
+      
+      // Use pre-calculated developerKPIs from backend and transform to match table structure
+      const backendDevKPIs = metricsData.kpis?.developerKPIs || [];
+      const developerKPIs = backendDevKPIs.map(dev => ({
+        developer: dev.developer,
+        complianceRate: dev.slaCompliance || '0.0',
+        met: dev.ticketsWithComment || dev.withComment || 0,
+        breached: dev.withoutComment || 0,
+        pending: 0,
+        total: dev.totalAssigned || dev.totalTickets || 0,
+        avgResponseTime: dev.avgResponseTime || 'N/A'
+      }));
+      
+      // Day of week analysis
+      const dayStats = { Mon: {}, Tue: {}, Wed: {}, Thu: {}, Fri: {}, Sat: {}, Sun: {} };
+      Object.keys(dayStats).forEach(day => {
+        dayStats[day] = { met: 0, breached: 0, total: 0 };
+      });
+      
+      metrics.forEach(issue => {
+        if (issue.dayOfWeek && issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
+          const firstSla = issue.sla[0];
+          const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
+          
+          if (slaGoalMinutes !== null) {
+            const day = issue.dayOfWeek;
+            if (dayStats[day]) {
+              dayStats[day].total++;
+              const breached = issue.businessHoursToFirstOnCallAction > slaGoalMinutes;
+              if (!breached) {
+                dayStats[day].met++;
+              } else {
+                dayStats[day].breached++;
+              }
+            }
+          }
+        }
+      });
+      
+      const dayOfWeekKPIs = Object.entries(dayStats).map(([day, stats]) => {
+        const complianceRate = stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : '0.0';
+        return { day, ...stats, complianceRate };
+      });
+      
+      // Response time distribution
+      const distribution = {
+        'Under 1 hour': 0,
+        '1-2 hours': 0,
+        '2-4 hours': 0,
+        '4-8 hours': 0,
+        'Over 8 hours': 0,
+        'No response': 0
+      };
+      
+      responseTimes.forEach(minutes => {
+        if (minutes === null || minutes === undefined) {
+          distribution['No response']++;
+        } else if (minutes < 60) {
+          distribution['Under 1 hour']++;
+        } else if (minutes < 120) {
+          distribution['1-2 hours']++;
+        } else if (minutes < 240) {
+          distribution['2-4 hours']++;
+        } else if (minutes < 480) {
+          distribution['4-8 hours']++;
+        } else {
+          distribution['Over 8 hours']++;
+        }
+      });
+      
+      return {
+        overall: {
+          complianceRate: overallComplianceRate,
+          totalTickets: totalWithSLA,
+          metSLA: metSLA,
+          breachedSLA: totalWithSLA - metSLA,
+          avgResponseTime: avgResponseTime,
+          pendingSLA: 0
+        },
+        onCallManagerKPIs,
+        managerKPIs: onCallManagerKPIs, // Combined table expects this name
+        developerKPIs,
+        dayOfWeekKPIs,
+        responseTimeDistribution: distribution
+      };
+    }
     
     async function loadKPIs() {
       try {
@@ -416,7 +541,8 @@
           return;
         }
         
-        currentKPIs = metricsData.kpis;
+        // Calculate KPIs dynamically from raw metrics to match dashboard methodology
+        currentKPIs = calculateDynamicKPIs(metricsData);
         
         // Display period
         const startDate = metricsData.period?.start || localStorage.getItem('startDate') || 'N/A';
@@ -427,9 +553,7 @@
         renderKPICards(currentKPIs);
         renderOnCallTable(currentKPIs);
         renderDeveloperTable(currentKPIs);
-        renderCombinedTable(currentKPIs);
         renderResponseChart(currentKPIs);
-        renderDayTable(currentKPIs);
       } catch (error) {
         console.error('Error loading KPIs:', error);
         document.getElementById('kpi-cards').innerHTML = '<div class="no-data">Failed to load KPIs. Error: ' + error.message + '</div>';
@@ -568,41 +692,6 @@
       tbody.innerHTML = rows;
     }
     
-    function renderCombinedTable(kpis) {
-      const tbody = document.getElementById('combined-tbody');
-      
-      if (!kpis.managerKPIs || kpis.managerKPIs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No combined data available</td></tr>';
-        return;
-      }
-      
-      const rows = kpis.managerKPIs.map(m => {
-        const rate = parseFloat(m.complianceRate);
-        let badgeClass = 'badge-success';
-        if (rate < 70) badgeClass = 'badge-danger';
-        else if (rate < 85) badgeClass = 'badge-warning';
-        
-        return `
-          <tr>
-            <td><strong>${m.manager}</strong></td>
-            <td><span class="badge ${badgeClass}">${m.complianceRate}%</span></td>
-            <td>${m.met}</td>
-            <td>${m.breached}</td>
-            <td>${m.pending}</td>
-            <td>${m.total}</td>
-            <td>${m.avgResponseTime}</td>
-            <td>
-              <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${m.complianceRate}%"></div>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-      
-      tbody.innerHTML = rows;
-    }
-    
     function renderResponseChart(kpis) {
       const dist = kpis.responseTimeDistribution;
       if (!dist) {
@@ -623,39 +712,6 @@
       }).join('');
       
       chartContainer.innerHTML = bars;
-    }
-    
-    function renderDayTable(kpis) {
-      const tbody = document.getElementById('day-tbody');
-      
-      if (!kpis.timeAnalysis || !kpis.timeAnalysis.byDayOfWeek || kpis.timeAnalysis.byDayOfWeek.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="no-data">No day of week data available</td></tr>';
-        return;
-      }
-      
-      const rows = kpis.timeAnalysis.byDayOfWeek.map(d => {
-        const rate = parseFloat(d.complianceRate);
-        let badgeClass = 'badge-success';
-        if (rate < 70) badgeClass = 'badge-danger';
-        else if (rate < 85) badgeClass = 'badge-warning';
-        
-        return `
-          <tr>
-            <td><strong>${d.day}</strong></td>
-            <td>${d.total}</td>
-            <td>${d.met}</td>
-            <td>${d.breached}</td>
-            <td><span class="badge ${badgeClass}">${d.complianceRate}%</span></td>
-            <td>
-              <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${d.complianceRate}%"></div>
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join('');
-      
-      tbody.innerHTML = rows;
     }
     
     function refreshKPIs() {
