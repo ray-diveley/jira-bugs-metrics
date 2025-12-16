@@ -1013,10 +1013,11 @@
 
                 // Update assignee table using comprehensive KPI data from backend
                 const assigneeTbody = document.getElementById('assignee-tbody');
+                let assigneeRows = '';
                 
                 if (data.kpis && data.kpis.developerKPIs && data.kpis.developerKPIs.length > 0) {
                     // Use detailed metrics from backend
-                    const assigneeRows = data.kpis.developerKPIs.map(dev => {
+                    assigneeRows = data.kpis.developerKPIs.map(dev => {
                         const noCommentRate = parseFloat(dev.noCommentRate);
                         const resolutionRate = parseFloat(dev.resolutionRate);
                         
@@ -1046,10 +1047,9 @@
                             </tr>
                         `;
                     }).join('');
-                    assigneeTbody.innerHTML = assigneeRows;
                 } else {
                     // Fallback to old logic if KPI data not available
-                    const assigneeRows = Object.entries(assigneeStats)
+                    assigneeRows = Object.entries(assigneeStats)
                         .sort((a, b) => b[1].total - a[1].total)
                         .map(([assignee, stats]) => {
                             const avgResolution = stats.resolutionTimes.length > 0
@@ -1069,11 +1069,10 @@
                                 </tr>
                             `;
                         }).join('');
-                    assigneeTbody.innerHTML = assigneeRows;
                 }
-
+                
                 assigneeTbody.innerHTML = assigneeRows;
-                console.log('Updated assignee stats for', Object.keys(assigneeStats).length, 'assignees');
+                console.log('Updated assignee stats for', data.kpis?.developerKPIs?.length || Object.keys(assigneeStats).length, 'assignees');
 
                 // Calculate on-call compliance metrics
                 console.log('[DEBUG] Starting on-call compliance calculation');
