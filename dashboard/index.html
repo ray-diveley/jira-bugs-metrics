@@ -338,24 +338,23 @@
                 Loading date range...
             </div>
             <p style="color: #666; font-size: 0.9em; margin-bottom: 15px; font-style: italic;">
-                ℹ️ Tracks who was scheduled on-call vs who actually responded to tickets<br>
-                <strong>Schedule Coverage:</strong> Mon-Fri, 7:00 AM - 11:00 PM UTC (started Oct 31, 2025)<br>
-                <span style="font-size: 0.85em; color: #999;">Gaps shown as: [Weekend], [After Hours] (11pm-7am UTC), [Before Oct 31]</span>
+                ℹ️ Tracks SLA compliance for tickets created during each manager's on-call shift<br>
+                <strong>Schedule Coverage:</strong> Mon-Fri, 7:00 AM - 11:00 PM EST/EDT (started Oct 31, 2025)<br>
+                <span style="font-size: 0.85em; color: #999;">Goal: Ensure all tickets during shift are addressed within SLA (by team/automation). Gaps shown as: [Weekend], [After Hours], [Before Oct 31]</span>
             </p>
             <table>
                 <thead>
                     <tr>
                         <th>On-call Person</th>
                         <th>Tickets During Shifts</th>
-                        <th>Responded To</th>
-                        <th>Someone Else Handled</th>
+                        <th>Handled (by anyone)</th>
                         <th>No Response Yet</th>
-                        <th>Compliance Rate</th>
+                        <th>SLA Compliance</th>
                         <th>Avg Response Time</th>
                     </tr>
                 </thead>
                 <tbody id="oncall-tbody">
-                    <tr><td colspan="7" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="6" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1097,8 +1096,7 @@
                 ON_CALL_MANAGERS.forEach(person => {
                     onCallStats[person] = {
                         ticketsDuringShift: 0,
-                        respondedTo: 0,
-                        someoneElseHandled: 0,
+                        ticketsHandled: 0,  // Any ticket that got a response (by anyone)
                         noResponse: 0,
                         responseTimes: [],
                         breachedTickets: [],
@@ -1156,24 +1154,15 @@
                             }
                         }
                         
-                        // Check who actually took the first action (not just who assigned)
-                        // Use firstOnCallActionTime to determine if the on-call person responded
+                        // Track if ticket was handled (by anyone) or still has no response
                         if (!issue.firstOnCallActionTime) {
-                            // No action taken yet
+                            // No action taken yet - this is a problem
                             stats.noResponse++;
                         } else {
-                            // Someone took action - check if it was the on-call person
-                            // We need to map the email back to check
-                            const firstResponder = issue.assignedBy; // This is who took first action
-                            
-                            if (firstResponder === whoWasOnCall) {
-                                stats.respondedTo++;
-                                if (issue.businessHoursToFirstOnCallAction !== null) {
-                                    stats.responseTimes.push(issue.businessHoursToFirstOnCallAction);
-                                }
-                            } else {
-                                // Someone other than on-call person took first action
-                                stats.someoneElseHandled++;
+                            // Someone took action - count as handled regardless of who
+                            stats.ticketsHandled++;
+                            if (issue.businessHoursToFirstOnCallAction !== null) {
+                                stats.responseTimes.push(issue.businessHoursToFirstOnCallAction);
                             }
                         }
                     }
@@ -1218,8 +1207,7 @@
                             <tr class="${rowClass}" ${rowClick} style="${rowStyle}">
                                 <td>${caret}<strong>${person}</strong>${detailsText}</td>
                                 <td style="text-align: center;">${stats.ticketsDuringShift}</td>
-                                <td style="text-align: center; color: #28a745; font-weight: bold;">${stats.respondedTo}</td>
-                                <td style="text-align: center; color: #856404;">${stats.someoneElseHandled}</td>
+                                <td style="text-align: center; color: #28a745; font-weight: bold;">${stats.ticketsHandled}</td>
                                 <td style="text-align: center; color: ${stats.noResponse > 0 ? '#dc3545' : '#666'};">${stats.noResponse}</td>
                                 <td style="text-align: center; color: ${complianceColor}; font-weight: bold;">${complianceRate !== '--' ? complianceRate + '%' : '--'}</td>
                                 <td style="text-align: center;">${avgResponseTime}${avgResponseTime !== '--' ? 'h' : ''}</td>
