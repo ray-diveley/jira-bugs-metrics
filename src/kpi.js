@@ -229,11 +229,23 @@ export function calculateSLAKPIs(metricsData) {
     }
   });
 
-  const metCount = slaResults.filter(r => r.met).length;
+  // Calculate overall compliance - use unique tickets that met SLA (avoid double counting)
+  const uniqueTicketsMet = new Set();
+  const uniqueTicketsTotal = new Set();
+  
+  slaResults.forEach(r => {
+    uniqueTicketsTotal.add(r.ticket);
+    if (r.met) {
+      uniqueTicketsMet.add(r.ticket);
+    }
+  });
+
+  const metCount = uniqueTicketsMet.size;
+  const totalWithSLA = uniqueTicketsTotal.size;
   const breachedCount = slaResults.filter(r => !r.met && (r.status === 'responded' || r.status === 'resolved')).length;
   const pendingCount = slaResults.filter(r => r.status === 'pending').length;
 
-  const complianceRate = totalTickets > 0 ? (metCount / totalTickets) * 100 : 0;
+  const complianceRate = totalWithSLA > 0 ? Math.min(100, (metCount / totalWithSLA) * 100) : 0;
 
   // Separate on-call and assignee metrics
   const onCallResults = slaResults.filter(r => r.role === 'on-call');
