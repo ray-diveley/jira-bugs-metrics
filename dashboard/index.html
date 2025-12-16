@@ -347,14 +347,13 @@
                     <tr>
                         <th>On-call Person</th>
                         <th>Tickets During Shifts</th>
-                        <th>Handled (by anyone)</th>
                         <th>No Response Yet</th>
                         <th>SLA Compliance</th>
                         <th>Avg Response Time</th>
                     </tr>
                 </thead>
                 <tbody id="oncall-tbody">
-                    <tr><td colspan="6" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="5" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1207,7 +1206,6 @@
                             <tr class="${rowClass}" ${rowClick} style="${rowStyle}">
                                 <td>${caret}<strong>${person}</strong>${detailsText}</td>
                                 <td style="text-align: center;">${stats.ticketsDuringShift}</td>
-                                <td style="text-align: center; color: #28a745; font-weight: bold;">${stats.ticketsHandled}</td>
                                 <td style="text-align: center; color: ${stats.noResponse > 0 ? '#dc3545' : '#666'};">${stats.noResponse}</td>
                                 <td style="text-align: center; color: ${complianceColor}; font-weight: bold;">${complianceRate !== '--' ? complianceRate + '%' : '--'}</td>
                                 <td style="text-align: center;">${avgResponseTime}${avgResponseTime !== '--' ? 'h' : ''}</td>
