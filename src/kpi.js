@@ -154,11 +154,10 @@ export function calculateSLAKPIs(metricsData) {
       }
     }
 
-    // Track the assignee response (if different from on-call manager and is also a manager)
-    if (ticket.assigneeCurrent &&
-        ticket.assigneeCurrent !== ticket.assignedBy &&
-        ON_CALL_MANAGERS.includes(ticket.assigneeCurrent) &&
-        ticket.firstAssignmentTime) {
+    // Track ALL assignee responses (not just on-call managers)
+    // This tracks how well developers respond to and resolve tickets after assignment
+    if (ticket.assigneeCurrent && ticket.firstAssignmentTime) {
+      const assignee = ticket.assigneeCurrent;
       const assigneeResponseMinutes = ticket.timeToFirstAssigneeCommentMinutes;
       const assignmentOutsideHours = isOutsideBusinessHours(ticket.firstAssignmentTime);
       const assignmentContext = getCreatedTimeContext(ticket.firstAssignmentTime);
@@ -166,13 +165,14 @@ export function calculateSLAKPIs(metricsData) {
       if (assigneeResponseMinutes === null) {
         // No comment - check if resolved instead
         if (ticket.resolutionDate) {
+          // Resolved without comment - consider it as implicit response
           const assignmentDate = new Date(ticket.firstAssignmentTime);
           const resolutionDate = new Date(ticket.resolutionDate);
-          const businessMinutes = calculateBusinessMinutes(assignmentDate, resolutionDate, ticket.assigneeCurrent);
+          const businessMinutes = calculateBusinessMinutes(assignmentDate, resolutionDate, assignee);
           const actualMinutes = (resolutionDate - assignmentDate) / (1000 * 60);
           slaResults.push({
             ticket: ticket.key,
-            manager: ticket.assigneeCurrent,
+            manager: assignee,
             role: 'assignee',
             met: businessMinutes <= goalMinutes,
             responseMinutes: actualMinutes,
@@ -181,17 +181,18 @@ export function calculateSLAKPIs(metricsData) {
             goalMinutes,
             createdOutsideHours: assignmentOutsideHours,
             createdContext: assignmentContext,
-            status: 'resolved'
+            status: 'resolved-no-comment',
+            hasComment: false
           });
         } else {
-          // Not resolved either - still pending
+          // Not resolved and no comment - needs attention!
           const assignmentDate = new Date(ticket.firstAssignmentTime);
           const now = new Date();
-          const businessMinutes = calculateBusinessMinutes(assignmentDate, now, ticket.assigneeCurrent);
+          const businessMinutes = calculateBusinessMinutes(assignmentDate, now, assignee);
           const actualMinutes = (now - assignmentDate) / (1000 * 60);
           slaResults.push({
             ticket: ticket.key,
-            manager: ticket.assigneeCurrent,
+            manager: assignee,
             role: 'assignee',
             met: businessMinutes <= goalMinutes,
             responseMinutes: null,
@@ -200,16 +201,18 @@ export function calculateSLAKPIs(metricsData) {
             goalMinutes,
             createdOutsideHours: assignmentOutsideHours,
             createdContext: assignmentContext,
-            status: 'pending'
+            status: 'no-response',
+            hasComment: false
           });
         }
       } else {
+        // Has comment - check response time
         const assignmentDate = new Date(ticket.firstAssignmentTime);
         const responseDate = new Date(ticket.firstAssigneeCommentTime);
-        const businessMinutes = calculateBusinessMinutes(assignmentDate, responseDate, ticket.assigneeCurrent);
+        const businessMinutes = calculateBusinessMinutes(assignmentDate, responseDate, assignee);
         slaResults.push({
           ticket: ticket.key,
-          manager: ticket.assigneeCurrent,
+          manager: assignee,
           role: 'assignee',
           met: businessMinutes <= goalMinutes,
           responseMinutes: assigneeResponseMinutes,
@@ -218,7 +221,8 @@ export function calculateSLAKPIs(metricsData) {
           goalMinutes,
           createdOutsideHours: assignmentOutsideHours,
           createdContext: assignmentContext,
-          status: 'responded'
+          status: 'responded',
+          hasComment: true
         });
       }
     }
@@ -291,15 +295,60 @@ export function calculateSLAKPIs(metricsData) {
     avgResponseTime: calculateAvgResponseTime(onCallResults.filter(r => r.manager === manager && (r.status === 'responded' || r.status === 'resolved')))
   })).sort((a, b) => b.complianceRate - a.complianceRate);
 
-  // DEVELOPER performance (response after being assigned)
+  // DEVELOPER performance (response and resolution after being assigned)
   const developerPerformance = {};
+  const allTicketsByAssignee = {}; // Track ALL tickets (not just SLA ones)
+  
+  // Build comprehensive assignee stats from all metrics
+  metrics.forEach(ticket => {
+    if (ticket.assigneeCurrent && ticket.firstAssignmentTime) {
+      const assignee = ticket.assigneeCurrent;
+      
+      if (!allTicketsByAssignee[assignee]) {
+        allTicketsByAssignee[assignee] = {
+          totalAssigned: 0,
+          withComment: 0,
+          withoutComment: 0,
+          resolved: 0,
+          stillOpen: 0,
+          responseTimes: [],
+          resolutionTimes: []
+        };
+      }
+      
+      const stats = allTicketsByAssignee[assignee];
+      stats.totalAssigned++;
+      
+      // Track comment engagement
+      if (ticket.firstAssigneeCommentTime) {
+        stats.withComment++;
+        if (ticket.timeToFirstAssigneeCommentMinutes !== null) {
+          stats.responseTimes.push(ticket.timeToFirstAssigneeCommentMinutes);
+        }
+      } else {
+        stats.withoutComment++;
+      }
+      
+      // Track resolution
+      if (ticket.resolutionDate) {
+        stats.resolved++;
+        if (ticket.timeToResolutionMinutes !== null) {
+          stats.resolutionTimes.push(ticket.timeToResolutionMinutes);
+        }
+      } else {
+        stats.stillOpen++;
+      }
+    }
+  });
+  
+  // Calculate SLA compliance for assignees
   assigneeResults.forEach(result => {
     if (!developerPerformance[result.manager]) {
-      developerPerformance[result.manager] = { met: 0, breached: 0, pending: 0, total: 0 };
+      developerPerformance[result.manager] = { met: 0, breached: 0, noResponse: 0, total: 0 };
     }
     developerPerformance[result.manager].total++;
-    if (result.status === 'pending') {
-      developerPerformance[result.manager].pending++;
+    if (result.status === 'no-response') {
+      developerPerformance[result.manager].noResponse++;
     } else if (result.met) {
       developerPerformance[result.manager].met++;
     } else {
@@ -307,12 +356,32 @@ export function calculateSLAKPIs(metricsData) {
     }
   });
 
-  const developerKPIs = Object.entries(developerPerformance).map(([developer, stats]) => ({
-    developer,
-    ...stats,
-    complianceRate: stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : 0,
-    avgResponseTime: calculateAvgResponseTime(assigneeResults.filter(r => r.manager === developer && (r.status === 'responded' || r.status === 'resolved')))
-  })).sort((a, b) => b.complianceRate - a.complianceRate);
+  const developerKPIs = Object.entries(allTicketsByAssignee).map(([developer, stats]) => {
+    const slaStats = developerPerformance[developer] || { met: 0, breached: 0, noResponse: 0, total: 0 };
+    const avgResponseMinutes = stats.responseTimes.length > 0 
+      ? stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length 
+      : null;
+    const avgResolutionMinutes = stats.resolutionTimes.length > 0
+      ? stats.resolutionTimes.reduce((a, b) => a + b, 0) / stats.resolutionTimes.length
+      : null;
+    
+    return {
+      developer,
+      totalAssigned: stats.totalAssigned,
+      withComment: stats.withComment,
+      withoutComment: stats.withoutComment,
+      noCommentRate: ((stats.withoutComment / stats.totalAssigned) * 100).toFixed(1),
+      resolved: stats.resolved,
+      stillOpen: stats.stillOpen,
+      resolutionRate: ((stats.resolved / stats.totalAssigned) * 100).toFixed(1),
+      slaCompliance: slaStats.total > 0 ? ((slaStats.met / slaStats.total) * 100).toFixed(1) : 'N/A',
+      slaMet: slaStats.met,
+      slaBreached: slaStats.breached,
+      slaNoResponse: slaStats.noResponse,
+      avgResponseTime: avgResponseMinutes !== null ? formatMinutes(avgResponseMinutes) : 'N/A',
+      avgResolutionTime: avgResolutionMinutes !== null ? formatMinutes(avgResolutionMinutes) : 'N/A'
+    };
+  }).sort((a, b) => b.totalAssigned - a.totalAssigned);
 
   // Time-based analysis
   const byDayOfWeek = analyzeByDayOfWeek(metrics);
@@ -356,6 +425,21 @@ export function calculateSLAKPIs(metricsData) {
     responseTimeDistribution,
     details: slaResults
   };
+}
+
+function formatMinutes(minutes) {
+  const hours = Math.floor(minutes / 60);
+  const mins = Math.floor(minutes % 60);
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  
+  if (days > 0) {
+    return `${days}d ${remainingHours}h`;
+  } else if (hours > 0) {
+    return `${hours}h ${mins}m`;
+  } else {
+    return `${mins}m`;
+  }
 }
 
 function calculateAvgResponseTime(results) {

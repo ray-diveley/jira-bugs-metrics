@@ -363,21 +363,24 @@
         <div class="issues-table" style="margin-bottom: 30px;">
             <h2 style="margin-bottom: 20px; color: #333;">👨‍💻 Developer/Assignee Metrics <span id="date-range" style="font-size: 0.7em; color: #666; font-weight: normal;"></span></h2>
             <p style="color: #666; font-size: 0.85em; margin-bottom: 10px; font-style: italic;">
-                ℹ️ "Assignee Response Breached" tracks whether the assignee responded (via comment) or resolved the ticket within SLA <strong>after being assigned</strong> (different from On-Call SLA which tracks initial response when ticket was created)
+                ℹ️ Tracks assignee engagement and resolution performance. <strong>"No Comment"</strong> shows tickets without any assignee interaction - these need attention!
             </p>
             <table>
                 <thead>
                     <tr>
                         <th>Assignee</th>
                         <th>Total Assigned</th>
-                        <th>Active (Not Done)</th>
-                        <th>Completed</th>
-                        <th title="Number of tickets where assignee failed to respond within SLA after being assigned">Assignee Response Breached</th>
-                        <th>Avg Resolution Time (days)</th>
+                        <th>With Comment</th>
+                        <th title="Tickets with no assignee comment - need attention!">No Comment</th>
+                        <th>Resolved</th>
+                        <th>Still Open</th>
+                        <th title="Percentage of tickets resolved">Resolution %</th>
+                        <th title="Average time to first comment">Avg Response</th>
+                        <th title="Average time to resolution">Avg Resolution</th>
                     </tr>
                 </thead>
                 <tbody id="assignee-tbody">
-                    <tr><td colspan="6" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
+                    <tr><td colspan="9" style="text-align:center; color:#999;">Click "Refresh Metrics" to load data</td></tr>
                 </tbody>
             </table>
         </div>
@@ -1008,25 +1011,66 @@
                     }
                 });
 
-                // Update assignee table
+                // Update assignee table using comprehensive KPI data from backend
                 const assigneeTbody = document.getElementById('assignee-tbody');
-                const assigneeRows = Object.entries(assigneeStats)
-                    .sort((a, b) => b[1].total - a[1].total)
-                    .map(([assignee, stats]) => {
-                        const avgResolution = stats.resolutionTimes.length > 0
-                            ? minutesToDays(stats.resolutionTimes.reduce((a, b) => a + b, 0) / stats.resolutionTimes.length)
-                            : '--';
+                
+                if (data.kpis && data.kpis.developerKPIs && data.kpis.developerKPIs.length > 0) {
+                    // Use detailed metrics from backend
+                    const assigneeRows = data.kpis.developerKPIs.map(dev => {
+                        const noCommentRate = parseFloat(dev.noCommentRate);
+                        const resolutionRate = parseFloat(dev.resolutionRate);
+                        
+                        // Color coding for no comment rate (higher is worse)
+                        let noCommentColor = '#28a745'; // green
+                        if (noCommentRate > 50) noCommentColor = '#dc3545'; // red
+                        else if (noCommentRate > 30) noCommentColor = '#fd7e14'; // orange
+                        else if (noCommentRate > 10) noCommentColor = '#ffc107'; // yellow
+                        
+                        // Color coding for resolution rate (higher is better)
+                        let resolutionColor = '#28a745'; // green
+                        if (resolutionRate < 30) resolutionColor = '#dc3545'; // red
+                        else if (resolutionRate < 50) resolutionColor = '#fd7e14'; // orange
+                        else if (resolutionRate < 70) resolutionColor = '#ffc107'; // yellow
+                        
                         return `
                             <tr>
-                                <td><strong>${assignee}</strong></td>
-                                <td>${stats.total}</td>
-                                <td><strong style="color: ${stats.active > 0 ? '#856404' : '#28a745'}">${stats.active}</strong></td>
-                                <td>${stats.completed}</td>
-                                <td><strong style="color: ${stats.breached > 0 ? '#d9534f' : '#28a745'}">${stats.breached}</strong></td>
-                                <td>${avgResolution}</td>
+                                <td><strong>${dev.developer}</strong></td>
+                                <td>${dev.totalAssigned}</td>
+                                <td style="color: #28a745;">${dev.withComment}</td>
+                                <td><strong style="color: ${noCommentColor};" title="${dev.noCommentRate}% without comment">${dev.withoutComment}</strong></td>
+                                <td style="color: #28a745;">${dev.resolved}</td>
+                                <td style="color: ${dev.stillOpen > 0 ? '#856404' : '#999'};">${dev.stillOpen}</td>
+                                <td><strong style="color: ${resolutionColor};">${dev.resolutionRate}%</strong></td>
+                                <td>${dev.avgResponseTime}</td>
+                                <td>${dev.avgResolutionTime}</td>
                             </tr>
                         `;
                     }).join('');
+                    assigneeTbody.innerHTML = assigneeRows;
+                } else {
+                    // Fallback to old logic if KPI data not available
+                    const assigneeRows = Object.entries(assigneeStats)
+                        .sort((a, b) => b[1].total - a[1].total)
+                        .map(([assignee, stats]) => {
+                            const avgResolution = stats.resolutionTimes.length > 0
+                                ? minutesToDays(stats.resolutionTimes.reduce((a, b) => a + b, 0) / stats.resolutionTimes.length)
+                                : '--';
+                            return `
+                                <tr>
+                                    <td><strong>${assignee}</strong></td>
+                                    <td>${stats.total}</td>
+                                    <td>--</td>
+                                    <td>--</td>
+                                    <td>${stats.completed}</td>
+                                    <td>${stats.active}</td>
+                                    <td>--</td>
+                                    <td>--</td>
+                                    <td>${avgResolution}</td>
+                                </tr>
+                            `;
+                        }).join('');
+                    assigneeTbody.innerHTML = assigneeRows;
+                }
 
                 assigneeTbody.innerHTML = assigneeRows;
                 console.log('Updated assignee stats for', Object.keys(assigneeStats).length, 'assignees');
