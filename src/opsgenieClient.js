@@ -233,10 +233,17 @@ export async function getScheduleTimeline(scheduleId, startDate, endDate, apiKey
               const email = period.recipient.name || '';
               const displayName = email.split('@')[0];
               
+              // TIMEZONE FIX: Opsgenie schedule is in UTC but configured with EST times
+              // Shift times by +5 hours to convert UTC times to EST interpretation
+              const startUTC = new Date(period.startDate);
+              const endUTC = new Date(period.endDate);
+              const startEST = new Date(startUTC.getTime() + 5 * 60 * 60 * 1000);
+              const endEST = new Date(endUTC.getTime() + 5 * 60 * 60 * 1000);
+              
               shifts.push({
                 person: displayName,
-                shiftStart: period.startDate,
-                shiftEnd: period.endDate,
+                shiftStart: startEST.toISOString(),
+                shiftEnd: endEST.toISOString(),
                 type: period.type || 'on-call'
               });
             }
