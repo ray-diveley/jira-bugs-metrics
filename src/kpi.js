@@ -31,6 +31,7 @@ export function calculateSLAKPIs(metricsData) {
     'bgoldberg': 'Brad Goldberg',
     'jmaciorowski': 'Jeff Maciorowski',
     'atakkar': 'Akshay Vijay Takkar',
+    'akshay.takkar': 'Akshay Vijay Takkar',  // Opsgenie format
     'gsemenenko': 'Grigoriy Semenenko',
     'rdahl': 'Randy Dahl',
     'esuhov': 'Evgeniy Suhov',
