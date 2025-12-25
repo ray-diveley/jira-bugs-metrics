@@ -619,7 +619,9 @@
                 };
 
                 // Highlight on-call mismatch
-                const assignedBy = issue.assignedBy || '--';
+                // Use onCallPersonWhoActedFirst as the source of truth for who responded
+                const whoActuallyResponded = issue.onCallPersonWhoActedFirst || '--';
+                const assignedBy = whoActuallyResponded;
                 const whoWasOnCallEmail = issue.whoWasOnCall;
 
                 // Check if it's a special label (Weekend, After Hours, etc.)
@@ -687,12 +689,25 @@
                         timeToResolution = `<span style="color: ${elapsedColor}; font-weight: 500;" title="Still open">${elapsedDays}d (${elapsedHours}h) ⏳</span>`;
                     }
 
-                    // Check response SLA (did assignee comment?)
+                    // Check response SLA (did assignee comment or self-assign?)
                     if (goalMinutes !== null) {
+                        // Check if assignee is the one who acted first (self-assignment by SLA responder)
+                        const assigneeSelfActed = issue.onCallPersonWhoActedFirst &&
+                                                  issue.assigneeCurrent === issue.onCallPersonWhoActedFirst &&
+                                                  issue.businessHoursToFirstHumanAction !== null;
+
                         if (issue.businessHoursToFirstAssigneeComment !== null) {
                             // Assignee has commented - check if within SLA (using business hours)
                             const businessHours = (issue.businessHoursToFirstAssigneeComment / 60).toFixed(1);
                             if (issue.businessHoursToFirstAssigneeComment > goalMinutes) {
+                                assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${businessHours}h)</span>`;
+                            } else {
+                                assigneeSlaStatus = `<span style="color: #28a745;">✓ Responded (${businessHours}h)</span>`;
+                            }
+                        } else if (assigneeSelfActed) {
+                            // Assignee self-assigned (counts as response for SLA responders)
+                            const businessHours = (issue.businessHoursToFirstHumanAction / 60).toFixed(1);
+                            if (issue.businessHoursToFirstHumanAction > goalMinutes) {
                                 assigneeSlaStatus = `<span style="color: #dc3545; font-weight: bold;">⚠️ Breached (${businessHours}h)</span>`;
                             } else {
                                 assigneeSlaStatus = `<span style="color: #28a745;">✓ Responded (${businessHours}h)</span>`;
@@ -808,7 +823,15 @@
                 // Calculate ticket creation overview
                 let onCallCount = 0;
                 let outsideCount = 0;
-                const breakdownByPerson = {};
+                const breakdownByPerson = {
+                    'bgoldberg': 0,
+                    'jmaciorowski': 0,
+                    'atakkar': 0,
+                    'gsemenenko': 0,
+                    'rdahl': 0,
+                    'esuhov': 0,
+                    'mkuklin': 0
+                };
                 const outsideReasons = { weekend: 0, afterHours: 0, beforeSchedule: 0 };
 
                 data.metrics.forEach(issue => {
@@ -1014,25 +1037,25 @@
                 // Update assignee table using comprehensive KPI data from backend
                 const assigneeTbody = document.getElementById('assignee-tbody');
                 let assigneeRows = '';
-                
+
                 if (data.kpis && data.kpis.developerKPIs && data.kpis.developerKPIs.length > 0) {
                     // Use detailed metrics from backend
                     assigneeRows = data.kpis.developerKPIs.map(dev => {
                         const noCommentRate = parseFloat(dev.noCommentRate);
                         const resolutionRate = parseFloat(dev.resolutionRate);
-                        
+
                         // Color coding for no comment rate (higher is worse)
                         let noCommentColor = '#28a745'; // green
                         if (noCommentRate > 50) noCommentColor = '#dc3545'; // red
                         else if (noCommentRate > 30) noCommentColor = '#fd7e14'; // orange
                         else if (noCommentRate > 10) noCommentColor = '#ffc107'; // yellow
-                        
+
                         // Color coding for resolution rate (higher is better)
                         let resolutionColor = '#28a745'; // green
                         if (resolutionRate < 30) resolutionColor = '#dc3545'; // red
                         else if (resolutionRate < 50) resolutionColor = '#fd7e14'; // orange
                         else if (resolutionRate < 70) resolutionColor = '#ffc107'; // yellow
-                        
+
                         return `
                             <tr>
                                 <td><strong>${dev.developer}</strong></td>
@@ -1070,7 +1093,7 @@
                             `;
                         }).join('');
                 }
-                
+
                 assigneeTbody.innerHTML = assigneeRows;
                 console.log('Updated assignee stats for', data.kpis?.developerKPIs?.length || Object.keys(assigneeStats).length, 'assignees');
 
@@ -1121,45 +1144,57 @@
                         const stats = onCallStats[whoWasOnCall];
                         stats.ticketsDuringShift++;
 
+                        // Check if the on-call person who responded is the same as who was on-call
+                        const wasHandledByOnCallManager = issue.onCallPersonWhoActedFirst === whoWasOnCall;
+
+                        // Use first human action time for SLA measurement (includes non-managers)
+                        // This ensures we count when Manjeet or other developers respond quickly
+                        let actualResponseTime = issue.businessHoursToFirstHumanAction !== null ? issue.businessHoursToFirstHumanAction : issue.businessHoursToFirstOnCallAction;
+
                         // Check if SLA was breached or met (using business hours)
-                        if (issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
+                        if (issue.sla && issue.sla.length > 0 && actualResponseTime !== null) {
                             const firstSla = issue.sla[0];
                             const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
                             if (goalMinutes !== null) {
-                                if (issue.businessHoursToFirstOnCallAction > goalMinutes) {
+                                if (actualResponseTime > goalMinutes) {
                                     stats.slaBreachedCount++;
                                     stats.breachedTickets.push({
                                         key: issue.key,
                                         summary: issue.summary,
-                                        responseTime: (issue.businessHoursToFirstOnCallAction / 60).toFixed(1),
+                                        responseTime: (actualResponseTime / 60).toFixed(1),
                                         goalTime: (goalMinutes / 60).toFixed(1),
                                         created: issue.created,
-                                        firstActionTime: issue.firstOnCallActionTime,
-                                        actionType: issue.firstOnCallActionType,
-                                        handledByOthers: false
+                                        firstActionTime: issue.firstOnCallActionTime || (issue.onCallPersonWhoActedFirst ? issue.firstAssignmentTime : null),
+                                        actionType: issue.firstOnCallActionType || (issue.onCallPersonWhoActedFirst ? 'assigned' : null),
+                                        handledByOthers: !wasHandledByOnCallManager,
+                                        handledBy: issue.onCallPersonWhoActedFirst
                                     });
                                 } else {
                                     stats.slaMetCount++;
                                     stats.metTickets.push({
                                         key: issue.key,
                                         summary: issue.summary,
-                                        responseTime: (issue.businessHoursToFirstOnCallAction / 60).toFixed(1),
+                                        responseTime: (actualResponseTime / 60).toFixed(1),
                                         goalTime: (goalMinutes / 60).toFixed(1),
-                                        handledByOthers: false
+                                        created: issue.created,
+                                        firstActionTime: issue.firstOnCallActionTime || (issue.onCallPersonWhoActedFirst ? issue.firstAssignmentTime : null),
+                                        actionType: issue.firstOnCallActionType || (issue.onCallPersonWhoActedFirst ? 'assigned' : null),
+                                        handledByOthers: !wasHandledByOnCallManager,
+                                        handledBy: issue.onCallPersonWhoActedFirst
                                     });
                                 }
                             }
                         }
-                        
+
                         // Track if ticket was handled (by anyone) or still has no response
                         // Only count real human responses, not automation assignments
                         const hasOnCallResponse = issue.firstOnCallActionTime !== null;
                         const hasAssigneeComment = issue.firstAssigneeCommentTime !== null;
-                        const hasHumanAssignment = issue.firstAssignmentTime && issue.assignedBy && 
-                                                   !issue.assignedBy.toLowerCase().includes('automation') &&
-                                                   !issue.assignedBy.toLowerCase().includes('self-assigned');
-                        const hasAnyResponse = hasOnCallResponse || hasAssigneeComment || hasHumanAssignment;
-                        
+                        const hasHumanAction = issue.businessHoursToFirstHumanAction !== null; // SLA responder took action
+                        const hasHumanAssignment = issue.firstAssignmentTime && issue.assignedBy &&
+                                                   !issue.assignedBy.toLowerCase().includes('automation');
+                        const hasAnyResponse = hasOnCallResponse || hasAssigneeComment || hasHumanAction || hasHumanAssignment;
+
                         if (!hasAnyResponse) {
                             // No action taken yet by anyone (excluding automation) - this is a problem
                             stats.noResponse++;
@@ -1173,58 +1208,10 @@
                         } else {
                             // Someone took action - count as handled
                             stats.ticketsHandled++;
-                            
-                            // Track if handled by someone other than on-call manager
-                            if (!hasOnCallResponse && hasAnyResponse) {
-                                // Get goal time from SLA
-                                const goalMinutes = issue.sla && issue.sla.length > 0 && issue.sla[0].goalDuration ?
-                                    issue.sla[0].goalDuration / (1000 * 60) : null;
-                                
-                                // Calculate response time in minutes (time from creation to first assignment)
-                                const createdDate = new Date(issue.created);
-                                const assignedDate = issue.firstAssignmentTime ? new Date(issue.firstAssignmentTime) : null;
-                                const responseMinutes = assignedDate ? 
-                                    (assignedDate - createdDate) / (1000 * 60) : null;
-                                
-                                // Categorize as met or breached based on response time vs goal
-                                if (goalMinutes !== null && responseMinutes !== null) {
-                                    const responseHours = (responseMinutes / 60).toFixed(1);
-                                    const goalHours = (goalMinutes / 60).toFixed(1);
-                                    
-                                    if (responseMinutes > goalMinutes) {
-                                        stats.slaBreachedCount++;
-                                        stats.breachedTickets.push({
-                                            key: issue.key,
-                                            summary: issue.summary,
-                                            responseTime: responseHours,
-                                            goalTime: goalHours,
-                                            created: issue.created,
-                                            firstActionTime: issue.firstAssignmentTime,
-                                            actionType: 'assigned',
-                                            handledByOthers: true,
-                                            assignedBy: issue.assignedBy
-                                        });
-                                    } else {
-                                        stats.slaMetCount++;
-                                        stats.metTickets.push({
-                                            key: issue.key,
-                                            summary: issue.summary,
-                                            responseTime: responseHours,
-                                            goalTime: goalHours,
-                                            created: issue.created,
-                                            handledByOthers: true,
-                                            assignedBy: issue.assignedBy
-                                        });
-                                    }
-                                }
-                                
-                                // Add this response time to the on-call manager's average
-                                if (responseMinutes !== null) {
-                                    stats.responseTimes.push(responseMinutes);
-                                }
-                            } else if (issue.businessHoursToFirstOnCallAction !== null) {
-                                // On-call manager responded - use their business hours response time
-                                stats.responseTimes.push(issue.businessHoursToFirstOnCallAction);
+
+                            if (actualResponseTime !== null) {
+                                // Use the on-call response time for average
+                                stats.responseTimes.push(actualResponseTime);
                             }
                         }
                     }
@@ -1289,13 +1276,13 @@
                                     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
                                 }) : 'No response';
                                 const actionTypeStr = ticket.actionType === 'comment' ? 'commented' : 'assigned';
-                                const handledByBadge = ticket.handledByOthers ? 
+                                const handledByBadge = ticket.handledByOthers ?
                                     '<span style="display: inline-block; background: #e0e7ff; color: #4f46e5; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; margin-left: 8px; font-weight: 600;">👤 Handled by others</span>' : '';
-                                
+
                                 // Build details text
                                 let detailsText = '';
                                 if (ticket.handledByOthers) {
-                                    detailsText = `📅 Created: ${createdStr} → Assigned by ${ticket.assignedBy || 'Unknown'} at ${actionStr}`;
+                                    detailsText = `📅 Created: ${createdStr} → ${actionTypeStr} by ${ticket.handledBy || 'Unknown'} at ${actionStr}`;
                                 } else {
                                     detailsText = `📅 Created: ${createdStr} → ${actionDate ? actionTypeStr : 'no action'}: ${actionStr}`;
                                 }
@@ -1321,9 +1308,9 @@
                         // Met ticket rows (now expandable)
                         if (hasMet) {
                             stats.metTickets.forEach(ticket => {
-                                const handledByBadge = ticket.handledByOthers ? 
+                                const handledByBadge = ticket.handledByOthers ?
                                     '<span style="display: inline-block; background: #e0e7ff; color: #4f46e5; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; margin-left: 8px; font-weight: 600;">👤 Handled by others</span>' : '';
-                                
+
                                 // Add details for handled by others tickets
                                 let detailsHtml = '';
                                 if (ticket.handledByOthers) {
@@ -1331,11 +1318,16 @@
                                     const createdStr = createdDate.toLocaleString('en-US', {
                                         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
                                     });
+                                    const actionDate = ticket.firstActionTime ? new Date(ticket.firstActionTime) : null;
+                                    const actionStr = actionDate ? actionDate.toLocaleString('en-US', {
+                                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+                                    }) : 'Unknown';
+                                    const actionTypeStr = ticket.actionType === 'comment' ? 'commented' : 'assigned';
                                     detailsHtml = `<div style="font-size: 0.85em; color: #999; margin-top: 4px;">
-                                        📅 Created: ${createdStr} → Assigned by ${ticket.assignedBy || 'Unknown'}
+                                        📅 Created: ${createdStr} → ${actionTypeStr} by ${ticket.handledBy || 'Unknown'} at ${actionStr}
                                     </div>`;
                                 }
-                                
+
                                 oncallRowsHtml += `
                                     <tr class="oncall-detail-row" id="${personId}-detail" style="display:none; background: #f0f9ff;">
                                         <td style="padding-left: 40px;">

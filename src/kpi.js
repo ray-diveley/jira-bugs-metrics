@@ -3,20 +3,10 @@
  */
 
 import { calculateBusinessMinutes, isOutsideBusinessHours, getCreatedTimeContext } from './businessHours.js';
+import { ON_CALL_MANAGERS, SLA_RESPONDERS } from './constants.js';
 
 export function calculateSLAKPIs(metricsData) {
   const { metrics } = metricsData;
-
-  // Define on-call managers
-  const ON_CALL_MANAGERS = [
-    'Brad Goldberg',
-    'Jeff Maciorowski',
-    'Akshay Vijay Takkar',
-    'Grigoriy Semenenko',
-    'Randy Dahl',
-    'Evgeniy Suhov',
-    'Max Kuklin'
-  ];
 
   // Overall SLA Performance
   const totalTickets = metrics.length;
@@ -232,7 +222,7 @@ export function calculateSLAKPIs(metricsData) {
   // Calculate overall compliance - use unique tickets that met SLA (avoid double counting)
   const uniqueTicketsMet = new Set();
   const uniqueTicketsTotal = new Set();
-  
+
   slaResults.forEach(r => {
     uniqueTicketsTotal.add(r.ticket);
     if (r.met) {
@@ -311,12 +301,12 @@ export function calculateSLAKPIs(metricsData) {
   // DEVELOPER performance (response and resolution after being assigned)
   const developerPerformance = {};
   const allTicketsByAssignee = {}; // Track ALL tickets (not just SLA ones)
-  
+
   // Build comprehensive assignee stats from all metrics
   metrics.forEach(ticket => {
     if (ticket.assigneeCurrent && ticket.firstAssignmentTime) {
       const assignee = ticket.assigneeCurrent;
-      
+
       if (!allTicketsByAssignee[assignee]) {
         allTicketsByAssignee[assignee] = {
           totalAssigned: 0,
@@ -328,10 +318,10 @@ export function calculateSLAKPIs(metricsData) {
           resolutionTimes: []
         };
       }
-      
+
       const stats = allTicketsByAssignee[assignee];
       stats.totalAssigned++;
-      
+
       // Track comment engagement
       if (ticket.firstAssigneeCommentTime) {
         stats.withComment++;
@@ -341,7 +331,7 @@ export function calculateSLAKPIs(metricsData) {
       } else {
         stats.withoutComment++;
       }
-      
+
       // Track resolution
       if (ticket.resolutionDate) {
         stats.resolved++;
@@ -353,7 +343,7 @@ export function calculateSLAKPIs(metricsData) {
       }
     }
   });
-  
+
   // Calculate SLA compliance for assignees
   assigneeResults.forEach(result => {
     if (!developerPerformance[result.manager]) {
@@ -371,13 +361,13 @@ export function calculateSLAKPIs(metricsData) {
 
   const developerKPIs = Object.entries(allTicketsByAssignee).map(([developer, stats]) => {
     const slaStats = developerPerformance[developer] || { met: 0, breached: 0, noResponse: 0, total: 0 };
-    const avgResponseMinutes = stats.responseTimes.length > 0 
-      ? stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length 
+    const avgResponseMinutes = stats.responseTimes.length > 0
+      ? stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length
       : null;
     const avgResolutionMinutes = stats.resolutionTimes.length > 0
       ? stats.resolutionTimes.reduce((a, b) => a + b, 0) / stats.resolutionTimes.length
       : null;
-    
+
     return {
       developer,
       totalAssigned: stats.totalAssigned,
@@ -445,7 +435,7 @@ function formatMinutes(minutes) {
   const mins = Math.floor(minutes % 60);
   const days = Math.floor(hours / 24);
   const remainingHours = hours % 24;
-  
+
   if (days > 0) {
     return `${days}d ${remainingHours}h`;
   } else if (hours > 0) {

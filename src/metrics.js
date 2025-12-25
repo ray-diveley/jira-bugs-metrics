@@ -1,16 +1,6 @@
 import { differenceInMinutes, parseISO } from 'date-fns';
 import { calculateBusinessMinutes, isOutsideBusinessHours, getCreatedTimeContext } from './businessHours.js';
-
-// Define on-call managers (must match kpi.js)
-const ON_CALL_MANAGERS = [
-  'Brad Goldberg',
-  'Jeff Maciorowski',
-  'Akshay Vijay Takkar',
-  'Grigoriy Semenenko',
-  'Randy Dahl',
-  'Evgeniy Suhov',
-  'Max Kuklin'
-];
+import { ON_CALL_MANAGERS, SLA_RESPONDERS } from './constants.js';
 
 export function computeMetrics(issue) {
   const key = issue.key;
@@ -43,19 +33,22 @@ export function computeMetrics(issue) {
   }
 
   // Find first assignee assignment time and who assigned it
+  // Note: changelog.histories is in reverse chronological order (newest first)
   let firstAssignmentTime = null;
   let assignedBy = null;
-  for (const h of histories) {
+  for (let i = histories.length - 1; i >= 0; i--) {
+    const h = histories[i];
     for (const item of h.items) {
       if (item.field === 'assignee' && item.toString) {
-        firstAssignmentTime = h.created;
-        assignedBy = h.author && h.author.displayName ? h.author.displayName : 'Unknown';
+        if (!firstAssignmentTime) {
+          firstAssignmentTime = h.created;
+          assignedBy = h.author && h.author.displayName ? h.author.displayName : 'Unknown';
+        }
         break;
       }
     }
-    if (firstAssignmentTime) break;
   }
-  
+
   // If no assignment in changelog but there's a current assignee, assume assigned at creation
   if (!firstAssignmentTime && assignee) {
     firstAssignmentTime = created;
@@ -70,12 +63,12 @@ export function computeMetrics(issue) {
   let firstOnCallActionTime = null;
   let firstOnCallActionType = null;
   let onCallPersonWhoActedFirst = null;
-  
+
   // Check all history items for assignments by on-call managers
   for (const h of histories) {
     const actorName = h.author && h.author.displayName ? h.author.displayName : null;
     if (!actorName || !ON_CALL_MANAGERS.includes(actorName)) continue;
-    
+
     for (const item of h.items) {
       if (item.field === 'assignee' && item.toString) {
         const actionTime = h.created;
@@ -88,12 +81,12 @@ export function computeMetrics(issue) {
       }
     }
   }
-  
+
   // Check all comments for comments by on-call managers (including current assignee)
   for (const c of comments) {
     const authorName = c.author && c.author.displayName ? c.author.displayName : null;
     if (!authorName || !ON_CALL_MANAGERS.includes(authorName)) continue;
-    
+
     const commentTime = c.created;
     if (!firstOnCallActionTime || parseISO(commentTime) < parseISO(firstOnCallActionTime)) {
       firstOnCallActionTime = commentTime;
@@ -101,16 +94,57 @@ export function computeMetrics(issue) {
       onCallPersonWhoActedFirst = authorName;
     }
   }
-  
+
   // If current assignee is an on-call manager and took first action, update assignedBy
   if (onCallPersonWhoActedFirst && assignee === onCallPersonWhoActedFirst && !assignedBy) {
     assignedBy = 'Self-assigned';
   }
 
+  // Find first action from SLA responders (on-call managers + key engineers)
+  // This is used for SLA measurement - only these people's actions count
+  let firstHumanActionTime = null;
+  let firstHumanActionPerson = null;
+
+  // Check for first assignment by SLA responders
+  // Iterate in reverse chronological order to find the earliest assignment
+  for (let i = histories.length - 1; i >= 0; i--) {
+    const h = histories[i];
+    const actorName = h.author && h.author.displayName ? h.author.displayName : null;
+    if (!actorName || !SLA_RESPONDERS.includes(actorName)) continue;
+
+    for (const item of h.items) {
+      if (item.field === 'assignee' && item.toString) {
+        if (!firstHumanActionTime || parseISO(h.created) < parseISO(firstHumanActionTime)) {
+          firstHumanActionTime = h.created;
+          firstHumanActionPerson = actorName;
+        }
+        break;
+      }
+    }
+  }
+
+  // Check for first comment by SLA responders
+  for (const c of comments) {
+    const authorName = c.author && c.author.displayName ? c.author.displayName : null;
+    if (!authorName || !SLA_RESPONDERS.includes(authorName)) continue;
+
+    const commentTime = c.created;
+    if (!firstHumanActionTime || parseISO(commentTime) < parseISO(firstHumanActionTime)) {
+      firstHumanActionTime = commentTime;
+      firstHumanActionPerson = authorName;
+    }
+  }
+
+  // Update onCallPersonWhoActedFirst if no on-call manager acted first
+  // This ensures non-on-call SLA responders (like Katelyn, Manjeet) are tracked
+  if (!onCallPersonWhoActedFirst && firstHumanActionPerson) {
+    onCallPersonWhoActedFirst = firstHumanActionPerson;
+  }
+
   // Legacy: Find first manager comment (any comment from the person who assigned)
   let firstManagerCommentTime = null;
   let managerCommentedBeforeAssignment = false;
-  
+
   if (assignedBy) {
     for (const c of comments) {
       if (c.author && c.author.displayName === assignedBy) {
@@ -149,9 +183,9 @@ export function computeMetrics(issue) {
   const timeToFirstAssigneeCommentMinutes = (firstAssignmentTime && firstAssigneeCommentTime)
     ? safeDiffMinutes(firstAssignmentTime, firstAssigneeCommentTime)
     : null;
-  
+
   // Calculate on-call response metrics
-  const timeToFirstOnCallActionMinutes = firstOnCallActionTime 
+  const timeToFirstOnCallActionMinutes = firstOnCallActionTime
     ? safeDiffMinutes(created, firstOnCallActionTime)
     : null;
   const timeToAssignmentMinutes = firstAssignmentTime
@@ -163,17 +197,17 @@ export function computeMetrics(issue) {
 
   // Extract SLA information - search all custom fields for SLA data
   let slaData = null;
-  
+
   // Common SLA field patterns in Jira
-  const slaFieldCandidates = Object.keys(fields).filter(key => 
-    key.toLowerCase().includes('sla') || 
+  const slaFieldCandidates = Object.keys(fields).filter(key =>
+    key.toLowerCase().includes('sla') ||
     key.includes('customfield')
   );
-  
+
   for (const fieldKey of slaFieldCandidates) {
     const field = fields[fieldKey];
     if (!field) continue;
-    
+
     // Check for SLA structure
     if (field.completedCycles && field.completedCycles.length > 0) {
       slaData = field.completedCycles.map(cycle => ({
@@ -210,13 +244,23 @@ export function computeMetrics(issue) {
 
   // Calculate business hours for key metrics
   // On-call action uses default (EST) timezone since tickets come from US/UK customers
-  const businessHoursToFirstOnCallAction = firstOnCallActionTime 
+  const businessHoursToFirstOnCallAction = firstOnCallActionTime
     ? calculateBusinessMinutes(created, firstOnCallActionTime)
     : null;
-  
+
   // Assignee response uses assignee's timezone for fair measurement
   const businessHoursToFirstAssigneeComment = (firstAssignmentTime && firstAssigneeCommentTime && assignee)
     ? calculateBusinessMinutes(firstAssignmentTime, firstAssigneeCommentTime, assignee)
+    : null;
+
+  // Calculate business hours from creation to assignee comment (for SLA comparison)
+  const businessHoursToFirstAssigneeCommentFromCreation = firstAssigneeCommentTime
+    ? calculateBusinessMinutes(created, firstAssigneeCommentTime)
+    : null;
+
+  // Calculate business hours to first HUMAN action (for true SLA measurement)
+  const businessHoursToFirstHumanAction = firstHumanActionTime
+    ? calculateBusinessMinutes(created, firstHumanActionTime)
     : null;
 
   return {
@@ -233,12 +277,15 @@ export function computeMetrics(issue) {
     firstManagerCommentTime,
     firstOnCallActionTime,
     firstOnCallActionType,
+    onCallPersonWhoActedFirst,
     managerCommentedBeforeAssignment,
     timeToFirstOnCallActionMinutes,
     timeToAssignmentMinutes,
     timeToManagerCommentMinutes,
     businessHoursToFirstOnCallAction,
     businessHoursToFirstAssigneeComment,
+    businessHoursToFirstAssigneeCommentFromCreation,
+    businessHoursToFirstHumanAction,
     createdOutsideBusinessHours: isOutsideBusinessHours(created),
     createdTimeContext: getCreatedTimeContext(created),
     sla: slaData,

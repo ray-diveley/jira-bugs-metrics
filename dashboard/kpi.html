@@ -10,19 +10,19 @@
       padding: 0;
       box-sizing: border-box;
     }
-    
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       padding: 20px;
     }
-    
+
     .container {
       max-width: 1400px;
       margin: 0 auto;
     }
-    
+
     header {
       background: white;
       border-radius: 12px;
@@ -33,17 +33,17 @@
       justify-content: space-between;
       align-items: center;
     }
-    
+
     h1 {
       color: #2d3748;
       font-size: 28px;
     }
-    
+
     .nav-buttons {
       display: flex;
       gap: 10px;
     }
-    
+
     .btn {
       padding: 10px 20px;
       border: none;
@@ -53,26 +53,26 @@
       font-weight: 600;
       transition: all 0.3s ease;
     }
-    
+
     .btn-primary {
       background: #667eea;
       color: white;
     }
-    
+
     .btn-primary:hover {
       background: #5568d3;
       transform: translateY(-1px);
     }
-    
+
     .btn-secondary {
       background: #48bb78;
       color: white;
     }
-    
+
     .btn-secondary:hover {
       background: #38a169;
     }
-    
+
     /* KPI Cards Grid */
     .kpi-grid {
       display: grid;
@@ -80,7 +80,7 @@
       gap: 20px;
       margin-bottom: 30px;
     }
-    
+
     .kpi-card {
       background: white;
       border-radius: 12px;
@@ -88,11 +88,11 @@
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
       transition: transform 0.3s ease;
     }
-    
+
     .kpi-card:hover {
       transform: translateY(-5px);
     }
-    
+
     .kpi-label {
       color: #718096;
       font-size: 14px;
@@ -100,26 +100,26 @@
       text-transform: uppercase;
       margin-bottom: 10px;
     }
-    
+
     .kpi-value {
       color: #2d3748;
       font-size: 36px;
       font-weight: 700;
       margin-bottom: 5px;
     }
-    
+
     .kpi-value.success {
       color: #48bb78;
     }
-    
+
     .kpi-value.warning {
       color: #ed8936;
     }
-    
+
     .kpi-value.danger {
       color: #f56565;
     }
-    
+
     .kpi-trend {
       display: flex;
       align-items: center;
@@ -127,15 +127,15 @@
       font-size: 14px;
       margin-top: 10px;
     }
-    
+
     .kpi-trend.up {
       color: #48bb78;
     }
-    
+
     .kpi-trend.down {
       color: #f56565;
     }
-    
+
     /* Charts and Tables */
     .section {
       background: white;
@@ -144,7 +144,7 @@
       margin-bottom: 20px;
       box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    
+
     .section-title {
       color: #2d3748;
       font-size: 20px;
@@ -153,18 +153,18 @@
       padding-bottom: 10px;
       border-bottom: 2px solid #e2e8f0;
     }
-    
+
     table {
       width: 100%;
       border-collapse: collapse;
     }
-    
+
     th, td {
       padding: 12px;
       text-align: left;
       border-bottom: 1px solid #e2e8f0;
     }
-    
+
     th {
       background: #f7fafc;
       color: #4a5568;
@@ -172,11 +172,11 @@
       font-size: 12px;
       text-transform: uppercase;
     }
-    
+
     tr:hover {
       background: #f7fafc;
     }
-    
+
     .badge {
       display: inline-block;
       padding: 4px 12px;
@@ -184,27 +184,27 @@
       font-size: 12px;
       font-weight: 600;
     }
-    
+
     .badge-success {
       background: #c6f6d5;
       color: #22543d;
     }
-    
+
     .badge-danger {
       background: #fed7d7;
       color: #742a2a;
     }
-    
+
     .badge-warning {
       background: #feebc8;
       color: #744210;
     }
-    
+
     .badge-info {
       background: #bee3f8;
       color: #2c5282;
     }
-    
+
     .progress-bar-container {
       width: 100%;
       height: 8px;
@@ -212,19 +212,19 @@
       border-radius: 4px;
       overflow: hidden;
     }
-    
+
     .progress-bar {
       height: 100%;
       background: linear-gradient(90deg, #48bb78 0%, #38a169 100%);
       transition: width 0.5s ease;
     }
-    
+
     .chart-container {
       width: 100%;
       height: 300px;
       margin-top: 20px;
     }
-    
+
     .bar-chart {
       display: flex;
       align-items: flex-end;
@@ -233,7 +233,7 @@
       padding: 20px 0;
       gap: 10px;
     }
-    
+
     .bar {
       flex: 1;
       background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
@@ -242,12 +242,12 @@
       position: relative;
       transition: all 0.3s ease;
     }
-    
+
     .bar:hover {
       opacity: 0.8;
       transform: scaleY(1.05);
     }
-    
+
     .bar-label {
       position: absolute;
       bottom: -25px;
@@ -257,7 +257,7 @@
       color: #4a5568;
       white-space: nowrap;
     }
-    
+
     .bar-value {
       position: absolute;
       top: -20px;
@@ -267,19 +267,19 @@
       font-weight: 600;
       color: #2d3748;
     }
-    
+
     .period-selector {
       display: flex;
       gap: 10px;
       margin-bottom: 20px;
     }
-    
+
     .loading {
       text-align: center;
       padding: 40px;
       color: #718096;
     }
-    
+
     .no-data {
       text-align: center;
       padding: 40px;
@@ -301,12 +301,12 @@
         <button class="btn btn-primary" onclick="refreshKPIs()">🔄 Refresh KPIs</button>
       </div>
     </header>
-    
+
     <!-- Main KPI Cards -->
     <div class="kpi-grid" id="kpi-cards">
       <div class="loading">Loading KPIs...</div>
     </div>
-    
+
     <!-- On-Call Performance -->
     <div class="section">
       <h2 class="section-title">📞 On-Call Manager Performance <span style="font-size: 14px; color: #718096;">(First response to new tickets - business hours)</span></h2>
@@ -328,7 +328,7 @@
         </tbody>
       </table>
     </div>
-    
+
     <!-- Developer Performance -->
     <div class="section">
       <h2 class="section-title">📱 Assignee Performance <span style="font-size: 14px; color: #718096;">(Response after assignment - business hours)</span></h2>
@@ -350,19 +350,19 @@
         </tbody>
       </table>
     </div>
-    
+
     <!-- Response Time Distribution -->
     <div class="section">
       <h2 class="section-title">Response Time Distribution</h2>
       <div class="bar-chart" id="response-chart"></div>
     </div>
-    
+
 
   </div>
-  
+
   <script>
     let currentKPIs = null;
-    
+
     // Helper function to determine if a ticket was created during off-hours
     function isOffHours(issue) {
       const whoWasOnCall = issue.whoWasOnCall;
@@ -372,36 +372,48 @@
         whoWasOnCall === '[Before Oct 31]'
       );
     }
-    
+
+    // Email to name mapping
+    const emailToName = {
+      'bgoldberg': 'Brad Goldberg',
+      'jmaciorowski': 'Jeff Maciorowski',
+      'atakkar': 'Akshay Vijay Takkar',
+      'akshay.takkar': 'Akshay Vijay Takkar',
+      'gsemenenko': 'Grigoriy Semenenko',
+      'rdahl': 'Randy Dahl',
+      'esuhov': 'Evgeniy Suhov',
+      'mkuklin': 'Max Kuklin'
+    };
+
     // Calculate KPIs dynamically from raw metrics (matches main dashboard methodology)
     function calculateDynamicKPIs(metricsData) {
       const metrics = metricsData.metrics || [];
       const goalMinutes = metricsData.slaGoalMinutes || 240;
-      
+
       // Overall SLA calculation - matches report and dashboard methodology
       // Filter to on-call hours only (exclude weekend/after-hours)
       let totalWithSLA = 0;
       let metSLA = 0;
       let responseTimes = [];
       let totalOnCallHoursTickets = 0;
-      
+
       metrics.forEach(issue => {
-        
+
         // Count all tickets during on-call hours
         if (!isOffHours(issue)) {
           totalOnCallHoursTickets++;
         }
-        
+
         // Only count tickets during on-call coverage hours
         if (!isOffHours(issue) && issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
           const firstSla = issue.sla[0];
           const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
-          
+
           if (slaGoalMinutes !== null) {
             totalWithSLA++;
             const responseTime = issue.businessHoursToFirstOnCallAction;
             responseTimes.push(responseTime);
-            
+
             const breached = responseTime > slaGoalMinutes;
             if (!breached) {
               metSLA++;
@@ -409,58 +421,74 @@
           }
         }
       });
-      
+
       const overallComplianceRate = totalWithSLA > 0 ? ((metSLA / totalWithSLA) * 100).toFixed(1) : '0.0';
       const avgResponseTime = responseTimes.length > 0
         ? (responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length).toFixed(0) + ' min'
         : 'N/A';
-      
+
       // On-call manager KPIs
       const managerStats = {};
       metrics.forEach(issue => {
         const manager = issue.whoWasOnCall;
         if (!manager || manager.includes('[')) return; // Skip non-manager entries
-        
+
         if (!managerStats[manager]) {
           managerStats[manager] = { met: 0, breached: 0, pending: 0, total: 0, responseTimes: [] };
         }
-        
-        if (issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
+
+        // Use the better response time: either on-call action or human action (whichever is faster)
+        // This ensures that when others help (like Katelyn, Manjeet), we count their faster response
+        let responseTime = null;
+        if (issue.businessHoursToFirstOnCallAction !== null && issue.businessHoursToFirstHumanAction !== null) {
+          responseTime = Math.min(issue.businessHoursToFirstOnCallAction, issue.businessHoursToFirstHumanAction);
+        } else if (issue.businessHoursToFirstOnCallAction !== null) {
+          responseTime = issue.businessHoursToFirstOnCallAction;
+        } else if (issue.businessHoursToFirstHumanAction !== null) {
+          responseTime = issue.businessHoursToFirstHumanAction;
+        }
+
+        if (issue.sla && issue.sla.length > 0) {
           const firstSla = issue.sla[0];
           const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
-          
+
           if (slaGoalMinutes !== null) {
-            managerStats[manager].total++;
-            const responseTime = issue.businessHoursToFirstOnCallAction;
-            managerStats[manager].responseTimes.push(responseTime);
-            
-            const breached = responseTime > slaGoalMinutes;
-            if (!breached) {
-              managerStats[manager].met++;
+            if (responseTime !== null) {
+              // Only count responded tickets in total for compliance %
+              managerStats[manager].total++;
+              managerStats[manager].responseTimes.push(responseTime);
+
+              const breached = responseTime > slaGoalMinutes;
+              if (!breached) {
+                managerStats[manager].met++;
+              } else {
+                managerStats[manager].breached++;
+              }
             } else {
-              managerStats[manager].breached++;
+              // Track pending separately (not included in compliance %)
+              managerStats[manager].pending++;
             }
           }
         }
       });
-      
+
       const onCallManagerKPIs = Object.entries(managerStats).map(([manager, stats]) => {
         const complianceRate = stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : '0.0';
         const avgResponseTime = stats.responseTimes.length > 0
           ? (stats.responseTimes.reduce((a, b) => a + b, 0) / stats.responseTimes.length).toFixed(0) + ' min'
           : 'N/A';
-        
+
         return {
           manager,
           complianceRate,
           met: stats.met,
           breached: stats.breached,
           pending: stats.pending,
-          total: stats.total,
+          total: stats.met + stats.breached + stats.pending,  // Include pending in total
           avgResponseTime
         };
       }).sort((a, b) => parseFloat(b.complianceRate) - parseFloat(a.complianceRate));
-      
+
       // Use pre-calculated developerKPIs from backend and transform to match table structure
       const backendDevKPIs = metricsData.kpis?.developerKPIs || [];
       const developerKPIs = backendDevKPIs.map(dev => ({
@@ -472,18 +500,18 @@
         total: dev.totalAssigned || dev.totalTickets || 0,
         avgResponseTime: dev.avgResponseTime || 'N/A'
       }));
-      
+
       // Day of week analysis
       const dayStats = { Mon: {}, Tue: {}, Wed: {}, Thu: {}, Fri: {}, Sat: {}, Sun: {} };
       Object.keys(dayStats).forEach(day => {
         dayStats[day] = { met: 0, breached: 0, total: 0 };
       });
-      
+
       metrics.forEach(issue => {
         if (!isOffHours(issue) && issue.dayOfWeek && issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
           const firstSla = issue.sla[0];
           const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
-          
+
           if (slaGoalMinutes !== null) {
             const day = issue.dayOfWeek;
             if (dayStats[day]) {
@@ -498,12 +526,12 @@
           }
         }
       });
-      
+
       const dayOfWeekKPIs = Object.entries(dayStats).map(([day, stats]) => {
         const complianceRate = stats.total > 0 ? ((stats.met / stats.total) * 100).toFixed(1) : '0.0';
         return { day, ...stats, complianceRate };
       });
-      
+
       // Response time distribution
       const distribution = {
         'Under 1 hour': 0,
@@ -513,7 +541,7 @@
         'Over 8 hours': 0,
         'No response': 0
       };
-      
+
       responseTimes.forEach(minutes => {
         if (minutes === null || minutes === undefined) {
           distribution['No response']++;
@@ -529,7 +557,7 @@
           distribution['Over 8 hours']++;
         }
       });
-      
+
       return {
         overall: {
           complianceRate: overallComplianceRate,
@@ -546,28 +574,28 @@
         responseTimeDistribution: distribution
       };
     }
-    
+
     async function loadKPIs() {
       try {
         // Load latest metrics file which now includes pre-calculated KPIs
         const metricsResponse = await fetch('/api/latest-metrics');
         const metricsData = await metricsResponse.json();
-        
+
         // The backend now calculates KPIs - check if they exist
         if (!metricsData.kpis) {
           console.warn('No KPIs found in metrics data, metrics may need to be regenerated');
           document.getElementById('kpi-cards').innerHTML = '<div class="no-data">KPIs not available. Please run metrics collection again.</div>';
           return;
         }
-        
+
         // Calculate KPIs dynamically from raw metrics to match dashboard methodology
         currentKPIs = calculateDynamicKPIs(metricsData);
-        
+
         // Display period
         const startDate = metricsData.period?.start || localStorage.getItem('startDate') || 'N/A';
         const endDate = metricsData.period?.end || localStorage.getItem('endDate') || 'N/A';
         document.getElementById('period-display').textContent = `Period: ${startDate} to ${endDate}`;
-        
+
         // Render all sections
         renderKPICards(currentKPIs);
         renderOnCallTable(currentKPIs);
@@ -578,15 +606,15 @@
         document.getElementById('kpi-cards').innerHTML = '<div class="no-data">Failed to load KPIs. Error: ' + error.message + '</div>';
       }
     }
-    
+
     function renderKPICards(kpis) {
       const { overall } = kpis;
       const complianceRate = parseFloat(overall.complianceRate);
-      
+
       let complianceClass = 'success';
       if (complianceRate < 70) complianceClass = 'danger';
       else if (complianceRate < 85) complianceClass = 'warning';
-      
+
       const html = `
         <div class="kpi-card">
           <div class="kpi-label">SLA Compliance Rate</div>
@@ -596,7 +624,7 @@
           </div>
           <div style="color: #718096; font-size: 12px; margin-top: 5px;">📅 Business hours only</div>
         </div>
-        
+
         <div class="kpi-card">
           <div class="kpi-label">Total Tickets</div>
           <div class="kpi-value">${overall.totalTickets}</div>
@@ -604,7 +632,7 @@
             📅 Business hours only
           </div>
         </div>
-        
+
         <div class="kpi-card">
           <div class="kpi-label">Met SLA</div>
           <div class="kpi-value success">${overall.metSLA}</div>
@@ -612,7 +640,7 @@
             ✅ Responded within SLA
           </div>
         </div>
-        
+
         <div class="kpi-card">
           <div class="kpi-label">Breached SLA</div>
           <div class="kpi-value danger">${overall.breachedSLA}</div>
@@ -620,7 +648,7 @@
             ⚠️ Response time exceeded
           </div>
         </div>
-        
+
         <div class="kpi-card">
           <div class="kpi-label">Avg Response Time</div>
           <div class="kpi-value">${overall.avgResponseTime}</div>
@@ -628,7 +656,7 @@
             ⏱️ Business hours only
           </div>
         </div>
-        
+
         <div class="kpi-card">
           <div class="kpi-label">Pending Response</div>
           <div class="kpi-value warning">${overall.pendingSLA}</div>
@@ -637,24 +665,24 @@
           </div>
         </div>
       `;
-      
+
       document.getElementById('kpi-cards').innerHTML = html;
     }
-    
+
     function renderOnCallTable(kpis) {
       const tbody = document.getElementById('oncall-tbody');
-      
+
       if (!kpis.onCallManagerKPIs || kpis.onCallManagerKPIs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="no-data">No on-call manager data available</td></tr>';
         return;
       }
-      
+
       const rows = kpis.onCallManagerKPIs.map(m => {
         const rate = parseFloat(m.complianceRate);
         let badgeClass = 'badge-success';
         if (rate < 70) badgeClass = 'badge-danger';
         else if (rate < 85) badgeClass = 'badge-warning';
-        
+
         return `
           <tr>
             <td><strong>${m.manager}</strong></td>
@@ -672,24 +700,24 @@
           </tr>
         `;
       }).join('');
-      
+
       tbody.innerHTML = rows;
     }
-    
+
     function renderDeveloperTable(kpis) {
       const tbody = document.getElementById('developer-tbody');
-      
+
       if (!kpis.developerKPIs || kpis.developerKPIs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="no-data">No developer data available</td></tr>';
         return;
       }
-      
+
       const rows = kpis.developerKPIs.map(d => {
         const rate = parseFloat(d.complianceRate);
         let badgeClass = 'badge-success';
         if (rate < 70) badgeClass = 'badge-danger';
         else if (rate < 85) badgeClass = 'badge-warning';
-        
+
         return `
           <tr>
             <td><strong>${d.developer}</strong></td>
@@ -707,10 +735,10 @@
           </tr>
         `;
       }).join('');
-      
+
       tbody.innerHTML = rows;
     }
-    
+
     function renderResponseChart(kpis) {
       const dist = kpis.responseTimeDistribution;
       if (!dist) {
@@ -719,7 +747,7 @@
       }
       const maxValue = Math.max(...Object.values(dist));
       const chartContainer = document.getElementById('response-chart');
-      
+
       const bars = Object.entries(dist).map(([label, value]) => {
         const height = maxValue > 0 ? (value / maxValue) * 100 : 0;
         return `
@@ -729,14 +757,14 @@
           </div>
         `;
       }).join('');
-      
+
       chartContainer.innerHTML = bars;
     }
-    
+
     function refreshKPIs() {
       location.reload();
     }
-    
+
     // Load on page load
     loadKPIs();
   </script>
