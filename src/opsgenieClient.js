@@ -233,28 +233,13 @@ export async function getScheduleTimeline(scheduleId, startDate, endDate, apiKey
               const email = period.recipient.name || '';
               const displayName = email.split('@')[0];
               
-              // TIMEZONE FIX: Opsgenie schedule is configured in UTC timezone but times represent local EST/EDT
-              // The schedule auto-adjusts for Daylight Saving Time:
-              // - Before Nov 3, 2025: EDT (UTC-4) - Opsgenie stores "11:00 UTC" for "7:00 AM EDT"
-              // - After Nov 3, 2025: EST (UTC-5) - Opsgenie stores "13:00 UTC" for "8:00 AM EST"
-              // We need to add the offset so shift times match ticket creation times in UTC
-              const startUTC = new Date(period.startDate);
-              const endUTC = new Date(period.endDate);
-              
-              // Determine if date is in DST (EDT = UTC-4) or Standard Time (EST = UTC-5)
-              // DST 2025 ended Sunday November 2 at 2:00 AM EST (becomes 1:00 AM)
-              // Before Nov 2 at 2 AM EST (Nov 2 at 6:00 UTC): EDT (UTC-4)
-              // After Nov 2 at 2 AM EST: EST (UTC-5)
-              const isDST = startUTC < new Date('2025-11-02T06:00:00Z'); // Nov 2, 2 AM EDT = 6 AM UTC
-              const offset = isDST ? 4 : 5; // EDT needs +4, EST needs +5
-              
-              const startConverted = new Date(startUTC.getTime() + offset * 60 * 60 * 1000);
-              const endConverted = new Date(endUTC.getTime() + offset * 60 * 60 * 1000);
-              
+              // Opsgenie returns shift times in UTC
+              // Jira timestamps are also normalized to UTC for comparison
+              // No timezone conversion needed - use the times directly
               shifts.push({
                 person: displayName,
-                shiftStart: startConverted.toISOString(),
-                shiftEnd: endConverted.toISOString(),
+                shiftStart: period.startDate,
+                shiftEnd: period.endDate,
                 type: period.type || 'on-call'
               });
             }

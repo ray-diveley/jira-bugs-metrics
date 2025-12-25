@@ -363,18 +363,37 @@
   <script>
     let currentKPIs = null;
     
+    // Helper function to determine if a ticket was created during off-hours
+    function isOffHours(issue) {
+      const whoWasOnCall = issue.whoWasOnCall;
+      return whoWasOnCall && (
+        whoWasOnCall === '[Weekend]' ||
+        whoWasOnCall === '[After Hours]' ||
+        whoWasOnCall === '[Before Oct 31]'
+      );
+    }
+    
     // Calculate KPIs dynamically from raw metrics (matches main dashboard methodology)
     function calculateDynamicKPIs(metricsData) {
       const metrics = metricsData.metrics || [];
       const goalMinutes = metricsData.slaGoalMinutes || 240;
       
       // Overall SLA calculation - matches report and dashboard methodology
+      // Filter to on-call hours only (exclude weekend/after-hours)
       let totalWithSLA = 0;
       let metSLA = 0;
       let responseTimes = [];
+      let totalOnCallHoursTickets = 0;
       
       metrics.forEach(issue => {
-        if (issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
+        
+        // Count all tickets during on-call hours
+        if (!isOffHours(issue)) {
+          totalOnCallHoursTickets++;
+        }
+        
+        // Only count tickets during on-call coverage hours
+        if (!isOffHours(issue) && issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
           const firstSla = issue.sla[0];
           const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
           
@@ -461,7 +480,7 @@
       });
       
       metrics.forEach(issue => {
-        if (issue.dayOfWeek && issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
+        if (!isOffHours(issue) && issue.dayOfWeek && issue.sla && issue.sla.length > 0 && issue.businessHoursToFirstOnCallAction !== null) {
           const firstSla = issue.sla[0];
           const slaGoalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
           
@@ -514,11 +533,11 @@
       return {
         overall: {
           complianceRate: overallComplianceRate,
-          totalTickets: totalWithSLA,
+          totalTickets: totalOnCallHoursTickets,
           metSLA: metSLA,
           breachedSLA: totalWithSLA - metSLA,
           avgResponseTime: avgResponseTime,
-          pendingSLA: 0
+          pendingSLA: totalOnCallHoursTickets - totalWithSLA
         },
         onCallManagerKPIs,
         managerKPIs: onCallManagerKPIs, // Combined table expects this name
@@ -582,7 +601,7 @@
           <div class="kpi-label">Total Tickets</div>
           <div class="kpi-value">${overall.totalTickets}</div>
           <div style="color: #718096; font-size: 14px; margin-top: 10px;">
-            In current period
+            📅 Business hours only
           </div>
         </div>
         

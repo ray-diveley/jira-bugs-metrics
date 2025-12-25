@@ -1075,7 +1075,6 @@
                 console.log('Updated assignee stats for', data.kpis?.developerKPIs?.length || Object.keys(assigneeStats).length, 'assignees');
 
                 // Calculate on-call compliance metrics
-                console.log('[DEBUG] Starting on-call compliance calculation');
                 const onCallStats = {};
                 const ON_CALL_MANAGERS = ['Brad Goldberg', 'Jeff Maciorowski', 'Akshay Vijay Takkar', 'Grigoriy Semenenko', 'Randy Dahl', 'Evgeniy Suhov', 'Max Kuklin'];
 
@@ -1100,6 +1099,7 @@
                         responseTimes: [],
                         breachedTickets: [],
                         metTickets: [],
+                        noResponseTickets: [],
                         slaMetCount: 0,
                         slaBreachedCount: 0
                     };
@@ -1126,10 +1126,6 @@
                             const firstSla = issue.sla[0];
                             const goalMinutes = firstSla.goalDuration ? firstSla.goalDuration / (1000 * 60) : null;
                             if (goalMinutes !== null) {
-                                // Debug logging for ticket 15277
-                                if (issue.key === 'M3GRSC-15277') {
-                                    console.log('[DEBUG 15277]', 'Business hours:', issue.businessHoursToFirstOnCallAction, 'Goal:', goalMinutes, 'Breach?', issue.businessHoursToFirstOnCallAction > goalMinutes);
-                                }
                                 if (issue.businessHoursToFirstOnCallAction > goalMinutes) {
                                     stats.slaBreachedCount++;
                                     stats.breachedTickets.push({
@@ -1139,7 +1135,8 @@
                                         goalTime: (goalMinutes / 60).toFixed(1),
                                         created: issue.created,
                                         firstActionTime: issue.firstOnCallActionTime,
-                                        actionType: issue.firstOnCallActionType
+                                        actionType: issue.firstOnCallActionType,
+                                        handledByOthers: false
                                     });
                                 } else {
                                     stats.slaMetCount++;
@@ -1147,20 +1144,86 @@
                                         key: issue.key,
                                         summary: issue.summary,
                                         responseTime: (issue.businessHoursToFirstOnCallAction / 60).toFixed(1),
-                                        goalTime: (goalMinutes / 60).toFixed(1)
+                                        goalTime: (goalMinutes / 60).toFixed(1),
+                                        handledByOthers: false
                                     });
                                 }
                             }
                         }
                         
                         // Track if ticket was handled (by anyone) or still has no response
-                        if (!issue.firstOnCallActionTime) {
-                            // No action taken yet - this is a problem
+                        // Only count real human responses, not automation assignments
+                        const hasOnCallResponse = issue.firstOnCallActionTime !== null;
+                        const hasAssigneeComment = issue.firstAssigneeCommentTime !== null;
+                        const hasHumanAssignment = issue.firstAssignmentTime && issue.assignedBy && 
+                                                   !issue.assignedBy.toLowerCase().includes('automation') &&
+                                                   !issue.assignedBy.toLowerCase().includes('self-assigned');
+                        const hasAnyResponse = hasOnCallResponse || hasAssigneeComment || hasHumanAssignment;
+                        
+                        if (!hasAnyResponse) {
+                            // No action taken yet by anyone (excluding automation) - this is a problem
                             stats.noResponse++;
+                            stats.noResponseTickets.push({
+                                key: issue.key,
+                                summary: issue.summary,
+                                created: issue.created,
+                                status: issue.status,
+                                assignee: issue.assigneeCurrent
+                            });
                         } else {
-                            // Someone took action - count as handled regardless of who
+                            // Someone took action - count as handled
                             stats.ticketsHandled++;
-                            if (issue.businessHoursToFirstOnCallAction !== null) {
+                            
+                            // Track if handled by someone other than on-call manager
+                            if (!hasOnCallResponse && hasAnyResponse) {
+                                // Get goal time from SLA
+                                const goalMinutes = issue.sla && issue.sla.length > 0 && issue.sla[0].goalDuration ?
+                                    issue.sla[0].goalDuration / (1000 * 60) : null;
+                                
+                                // Calculate response time in minutes (time from creation to first assignment)
+                                const createdDate = new Date(issue.created);
+                                const assignedDate = issue.firstAssignmentTime ? new Date(issue.firstAssignmentTime) : null;
+                                const responseMinutes = assignedDate ? 
+                                    (assignedDate - createdDate) / (1000 * 60) : null;
+                                
+                                // Categorize as met or breached based on response time vs goal
+                                if (goalMinutes !== null && responseMinutes !== null) {
+                                    const responseHours = (responseMinutes / 60).toFixed(1);
+                                    const goalHours = (goalMinutes / 60).toFixed(1);
+                                    
+                                    if (responseMinutes > goalMinutes) {
+                                        stats.slaBreachedCount++;
+                                        stats.breachedTickets.push({
+                                            key: issue.key,
+                                            summary: issue.summary,
+                                            responseTime: responseHours,
+                                            goalTime: goalHours,
+                                            created: issue.created,
+                                            firstActionTime: issue.firstAssignmentTime,
+                                            actionType: 'assigned',
+                                            handledByOthers: true,
+                                            assignedBy: issue.assignedBy
+                                        });
+                                    } else {
+                                        stats.slaMetCount++;
+                                        stats.metTickets.push({
+                                            key: issue.key,
+                                            summary: issue.summary,
+                                            responseTime: responseHours,
+                                            goalTime: goalHours,
+                                            created: issue.created,
+                                            handledByOthers: true,
+                                            assignedBy: issue.assignedBy
+                                        });
+                                    }
+                                }
+                                
+                                // Add this response time to the on-call manager's average
+                                if (responseMinutes !== null) {
+                                    stats.responseTimes.push(responseMinutes);
+                                }
+                            } else if (issue.businessHoursToFirstOnCallAction !== null) {
+                                // On-call manager responded - use their business hours response time
                                 stats.responseTimes.push(issue.businessHoursToFirstOnCallAction);
                             }
                         }
@@ -1189,7 +1252,8 @@
                         const rowStyle = stats.ticketsDuringShift === 0 ? 'color: #999; font-style: italic;' : '';
                         const hasBreaches = stats.breachedTickets.length > 0;
                         const hasMet = stats.metTickets.length > 0;
-                        const hasDetails = hasBreaches || hasMet;
+                        const hasNoResponse = stats.noResponseTickets && stats.noResponseTickets.length > 0;
+                        const hasDetails = hasBreaches || hasMet || hasNoResponse;
                         const personId = `oncall-person-${idx}`;
 
                         // Main row - clickable if has details
@@ -1200,6 +1264,7 @@
                         const detailsLabel = [];
                         if (hasBreaches) detailsLabel.push(`${stats.breachedTickets.length} breached`);
                         if (hasMet) detailsLabel.push(`${stats.metTickets.length} met`);
+                        if (hasNoResponse) detailsLabel.push(`${stats.noResponseTickets.length} no response`);
                         const detailsText = detailsLabel.length > 0 ? ` <span style="color: #666; font-size: 0.85em;">(${detailsLabel.join(', ')})</span>` : '';
 
                         oncallRowsHtml += `
@@ -1224,6 +1289,16 @@
                                     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
                                 }) : 'No response';
                                 const actionTypeStr = ticket.actionType === 'comment' ? 'commented' : 'assigned';
+                                const handledByBadge = ticket.handledByOthers ? 
+                                    '<span style="display: inline-block; background: #e0e7ff; color: #4f46e5; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; margin-left: 8px; font-weight: 600;">👤 Handled by others</span>' : '';
+                                
+                                // Build details text
+                                let detailsText = '';
+                                if (ticket.handledByOthers) {
+                                    detailsText = `📅 Created: ${createdStr} → Assigned by ${ticket.assignedBy || 'Unknown'} at ${actionStr}`;
+                                } else {
+                                    detailsText = `📅 Created: ${createdStr} → ${actionDate ? actionTypeStr : 'no action'}: ${actionStr}`;
+                                }
 
                                 oncallRowsHtml += `
                                     <tr class="oncall-detail-row" id="${personId}-detail" style="display:none; background: #fff3f3;">
@@ -1231,9 +1306,9 @@
                                             └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #dc3545; font-weight: bold; text-decoration: none;">${ticket.key}</a>
                                         </td>
                                         <td colspan="3" style="font-size: 0.9em; color: #666;">
-                                            ${ticket.summary}
+                                            ${ticket.summary}${handledByBadge}
                                             <div style="font-size: 0.85em; color: #999; margin-top: 4px;">
-                                                📅 Created: ${createdStr} → ${actionDate ? actionTypeStr : 'no action'}: ${actionStr}
+                                                ${detailsText}
                                             </div>
                                         </td>
                                         <td colspan="2" style="text-align: center; color: #dc3545;">⚠️ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)</td>
@@ -1246,13 +1321,59 @@
                         // Met ticket rows (now expandable)
                         if (hasMet) {
                             stats.metTickets.forEach(ticket => {
+                                const handledByBadge = ticket.handledByOthers ? 
+                                    '<span style="display: inline-block; background: #e0e7ff; color: #4f46e5; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; margin-left: 8px; font-weight: 600;">👤 Handled by others</span>' : '';
+                                
+                                // Add details for handled by others tickets
+                                let detailsHtml = '';
+                                if (ticket.handledByOthers) {
+                                    const createdDate = new Date(ticket.created);
+                                    const createdStr = createdDate.toLocaleString('en-US', {
+                                        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+                                    });
+                                    detailsHtml = `<div style="font-size: 0.85em; color: #999; margin-top: 4px;">
+                                        📅 Created: ${createdStr} → Assigned by ${ticket.assignedBy || 'Unknown'}
+                                    </div>`;
+                                }
+                                
                                 oncallRowsHtml += `
                                     <tr class="oncall-detail-row" id="${personId}-detail" style="display:none; background: #f0f9ff;">
                                         <td style="padding-left: 40px;">
                                             └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #28a745; font-weight: bold; text-decoration: none;">${ticket.key}</a>
                                         </td>
-                                        <td colspan="3" style="font-size: 0.9em; color: #666;">${ticket.summary}</td>
+                                        <td colspan="3" style="font-size: 0.9em; color: #666;">
+                                            ${ticket.summary}${handledByBadge}
+                                            ${detailsHtml}
+                                        </td>
                                         <td colspan="2" style="text-align: center; color: #28a745;">✓ ${ticket.responseTime}h (goal: ${ticket.goalTime}h)</td>
+                                        <td></td>
+                                    </tr>
+                                `;
+                            });
+                        }
+
+                        // No response ticket rows
+                        if (hasNoResponse) {
+                            stats.noResponseTickets.forEach(ticket => {
+                                const createdDate = new Date(ticket.created);
+                                const createdStr = createdDate.toLocaleString('en-US', {
+                                    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true
+                                });
+                                const now = new Date();
+                                const ageHours = ((now - createdDate) / (1000 * 60 * 60)).toFixed(1);
+
+                                oncallRowsHtml += `
+                                    <tr class="oncall-detail-row" id="${personId}-detail" style="display:none; background: #fff9e6;">
+                                        <td style="padding-left: 40px;">
+                                            └─ <a href="https://m3gr.atlassian.net/browse/${ticket.key}" target="_blank" style="color: #ff9800; font-weight: bold; text-decoration: none;">${ticket.key}</a>
+                                        </td>
+                                        <td colspan="3" style="font-size: 0.9em; color: #666;">
+                                            ${ticket.summary}
+                                            <div style="font-size: 0.85em; color: #999; margin-top: 4px;">
+                                                📅 Created: ${createdStr} | Status: ${ticket.status} | Assigned: ${ticket.assignee || 'Unassigned'}
+                                            </div>
+                                        </td>
+                                        <td colspan="2" style="text-align: center; color: #ff9800;">⏳ No response (${ageHours}h old)</td>
                                         <td></td>
                                     </tr>
                                 `;
