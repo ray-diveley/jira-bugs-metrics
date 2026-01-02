@@ -62,12 +62,32 @@
             padding: 25px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
-        /* Sticky header for issue details table only - no scrolling tbody */
-        .issues-table.scrollable-table th {
+        /* Scrollable table with sticky header for issue details */
+        .issues-table.scrollable-table {
+            max-height: 700px;
+            overflow-y: auto;
+            position: relative;
+        }
+        .issues-table.scrollable-table table {
+            display: block;
+        }
+        .issues-table.scrollable-table thead {
             position: sticky;
             top: 0;
             z-index: 10;
+        }
+        .issues-table.scrollable-table thead th {
             background: #667eea;
+        }
+        .issues-table.scrollable-table tbody {
+            display: block;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+        .issues-table.scrollable-table tr {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
         }
         table {
             width: 100%;
