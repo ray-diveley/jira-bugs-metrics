@@ -61,29 +61,12 @@
             border-radius: 12px;
             padding: 25px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            max-height: 600px;
-            overflow-y: auto;
-            overflow-x: auto;
-            position: relative;
         }
-        /* Sticky header for issue details table only */
-        .issues-table.scrollable-table table {
-            display: block;
-        }
+        /* Sticky header for issue details table only - no scrolling tbody */
         .issues-table.scrollable-table thead {
             position: sticky;
             top: 0;
             z-index: 10;
-        }
-        .issues-table.scrollable-table tbody {
-            display: block;
-            overflow-y: auto;
-            max-height: 500px;
-        }
-        .issues-table.scrollable-table tr {
-            display: table;
-            width: 100%;
-            table-layout: fixed;
         }
         table {
             width: 100%;
