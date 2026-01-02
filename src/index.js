@@ -31,7 +31,10 @@ async function main() {
     issues = await fetchIssues({});
     console.log(`Fetched ${issues.length} issues from Jira search.`);
     if (issues.length === 0 && cfg.JIRA_PROJECT_KEY) {
-      const fallback = await fetchViaProject({ projectKey: cfg.JIRA_PROJECT_KEY, maxIssues: Number(cfg.JIRA_MAX_ISSUES) || 50 });
+      const fallback = await fetchViaProject({
+        projectKey: cfg.JIRA_PROJECT_KEY,
+        maxIssues: cfg.JIRA_MAX_ISSUES ? Number(cfg.JIRA_MAX_ISSUES) : undefined
+      });
       console.log(`Project browse fallback returned ${fallback.length} issues.`);
       
       // Compute metrics first to get assignment dates
