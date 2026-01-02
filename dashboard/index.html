@@ -66,20 +66,21 @@
             overflow-x: auto;
             position: relative;
         }
-        .issues-table table {
+        /* Sticky header for issue details table only */
+        .issues-table.scrollable-table table {
             display: block;
         }
-        .issues-table thead {
+        .issues-table.scrollable-table thead {
             position: sticky;
             top: 0;
             z-index: 10;
         }
-        .issues-table tbody {
+        .issues-table.scrollable-table tbody {
             display: block;
             overflow-y: auto;
             max-height: 500px;
         }
-        .issues-table tr {
+        .issues-table.scrollable-table tr {
             display: table;
             width: 100%;
             table-layout: fixed;
@@ -404,7 +405,7 @@
             </table>
         </div>
 
-        <div class="issues-table">
+        <div class="issues-table scrollable-table">
             <h2 style="margin-bottom: 20px; color: #333; display: inline-block;">Issue Details</h2>
             <div style="display: inline-block; margin-left: 20px;">
                 <label for="assignee-filter" style="color: #666; font-size: 0.9em; margin-right: 8px;">Filter by Assignee:</label>

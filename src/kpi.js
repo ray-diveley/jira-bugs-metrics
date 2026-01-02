@@ -307,6 +307,11 @@ export function calculateSLAKPIs(metricsData) {
     if (ticket.assigneeCurrent && ticket.firstAssignmentTime) {
       const assignee = ticket.assigneeCurrent;
 
+      // Only track developers in SLA_RESPONDERS list
+      if (!SLA_RESPONDERS.includes(assignee)) {
+        return;
+      }
+
       if (!allTicketsByAssignee[assignee]) {
         allTicketsByAssignee[assignee] = {
           totalAssigned: 0,

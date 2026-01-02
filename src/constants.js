@@ -17,6 +17,5 @@ export const ON_CALL_MANAGERS = [
 export const SLA_RESPONDERS = [
   ...ON_CALL_MANAGERS,
   'Manjeet Kumar Mahto',
-  'Katelyn Schuh',
   'Mitali Goel'
 ];
