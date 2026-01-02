@@ -302,13 +302,16 @@ export function calculateSLAKPIs(metricsData) {
   const developerPerformance = {};
   const allTicketsByAssignee = {}; // Track ALL tickets (not just SLA ones)
 
+  // People to exclude from developer stats (non-developers)
+  const EXCLUDED_FROM_STATS = ['Katelyn Schuh'];
+
   // Build comprehensive assignee stats from all metrics
   metrics.forEach(ticket => {
     if (ticket.assigneeCurrent && ticket.firstAssignmentTime) {
       const assignee = ticket.assigneeCurrent;
 
-      // Only track developers in SLA_RESPONDERS list
-      if (!SLA_RESPONDERS.includes(assignee)) {
+      // Exclude non-developers from stats
+      if (EXCLUDED_FROM_STATS.includes(assignee)) {
         return;
       }
 
